@@ -50,7 +50,7 @@ void pk_ptm_init() {
 }
 
 
-static void map_page(uint64_t vaddr, uint64_t paddr, ptm_page_size_t page_size, bool rw, bool nx) {
+static void map_page(uintptr_t cr3, size_t level_count, uint64_t vaddr, uint64_t paddr, ptm_page_size_t page_size, bool rw, bool nx) {
     int lowest_level;
     switch(page_size) {
         case PTM_PAGE_SIZE_4K: lowest_level = 1; break;
@@ -58,8 +58,8 @@ static void map_page(uint64_t vaddr, uint64_t paddr, ptm_page_size_t page_size, 
         case PTM_PAGE_SIZE_1G: lowest_level = 3; break;
     }
 
-    uint64_t* current_table = (uint64_t*) (g_ptm.tplt + g_pk_boot_info->hhdm_offset);
-    for(int level = g_ptm.level_count; level > lowest_level; level--) {
+    uint64_t* current_table = (uint64_t*) (cr3 + g_pk_boot_info->hhdm_offset);
+    for(int level = level_count; level > lowest_level; level--) {
         int index = VADDR_TO_INDEX(vaddr, level);
 
         uint64_t entry = current_table[index];
@@ -69,7 +69,7 @@ static void map_page(uint64_t vaddr, uint64_t paddr, ptm_page_size_t page_size, 
             entry = ENTRY_FLAG_PRESENT | ((uint64_t) (uintptr_t) new_table & ENTRY_4K_ADDRESS_MASK);
             if(nx) entry |= ENTRY_FLAG_NX;
         } else {
-            if((entry & ENTRYH_FLAG_PS) != 0) pk_panic("cannot remap over a non-4k page %#llx", entry & ENTRY_4K_ADDRESS_MASK);
+            if((entry & ENTRYH_FLAG_PS) != 0) pk_panic("cannot remap over a non-4k page %lx", entry & ENTRY_4K_ADDRESS_MASK);
             if(!nx) entry &= ~ENTRY_FLAG_NX;
         }
         if(rw) entry |= ENTRY_FLAG_RW;
@@ -96,7 +96,7 @@ static void map_page(uint64_t vaddr, uint64_t paddr, ptm_page_size_t page_size, 
 }
 
 void pk_ptm_map(uint64_t vaddr, uint64_t paddr, uint64_t length, uint8_t flags) {
-    if(paddr % PTM_PAGE_GRANULARITY != 0 || vaddr % PTM_PAGE_GRANULARITY != 0 || length % PTM_PAGE_GRANULARITY != 0) pk_panic("unaligned mapping (%#llx -> %#llx / %#llx)", paddr, vaddr, length);
+    if(paddr % PTM_PAGE_GRANULARITY != 0 || vaddr % PTM_PAGE_GRANULARITY != 0 || length % PTM_PAGE_GRANULARITY != 0) pk_panic("unaligned mapping (%lx -> %lx / %lx)", paddr, vaddr, length);
     if((flags & PTM_FLAG_READ) == 0) pk_log_print("mapping with no read permission\n");
 
     uint64_t offset = 0;
@@ -105,7 +105,24 @@ void pk_ptm_map(uint64_t vaddr, uint64_t paddr, uint64_t length, uint8_t flags) 
         if(paddr % PTM_PAGE_SIZE_2M == 0 && vaddr % PTM_PAGE_SIZE_2M == 0 && length - offset >= PTM_PAGE_SIZE_2M) page_size = PTM_PAGE_SIZE_2M;
         if(g_x86_64_cpu_pdpe1gb_support && paddr % PTM_PAGE_SIZE_1G == 0 && vaddr % PTM_PAGE_SIZE_1G == 0 && length - offset >= PTM_PAGE_SIZE_1G) page_size = PTM_PAGE_SIZE_1G;
 
-        map_page(vaddr, paddr, page_size, (flags & PTM_FLAG_WRITE) != 0, g_x86_64_cpu_nx_support && (flags & PTM_FLAG_EXEC) == 0);
+        map_page(g_ptm.tplt, g_ptm.level_count, vaddr, paddr, page_size, (flags & PTM_FLAG_WRITE) != 0, g_x86_64_cpu_nx_support && (flags & PTM_FLAG_EXEC) == 0);
+        paddr += page_size;
+        vaddr += page_size;
+        offset += page_size;
+    }
+}
+
+void pk_ptm_map_at(uintptr_t cr3, size_t level_count, uint64_t vaddr, uint64_t paddr, uint64_t length, uint8_t flags) {
+    if(paddr % PTM_PAGE_GRANULARITY != 0 || vaddr % PTM_PAGE_GRANULARITY != 0 || length % PTM_PAGE_GRANULARITY != 0) pk_panic("unaligned mapping (%lx -> %lx / %lx)", paddr, vaddr, length);
+    if((flags & PTM_FLAG_READ) == 0) pk_log_print("mapping with no read permission\n");
+
+    uint64_t offset = 0;
+    while(offset < length) {
+        ptm_page_size_t page_size = PTM_PAGE_SIZE_4K;
+        if(paddr % PTM_PAGE_SIZE_2M == 0 && vaddr % PTM_PAGE_SIZE_2M == 0 && length - offset >= PTM_PAGE_SIZE_2M) page_size = PTM_PAGE_SIZE_2M;
+        if(g_x86_64_cpu_pdpe1gb_support && paddr % PTM_PAGE_SIZE_1G == 0 && vaddr % PTM_PAGE_SIZE_1G == 0 && length - offset >= PTM_PAGE_SIZE_1G) page_size = PTM_PAGE_SIZE_1G;
+
+        map_page(cr3, level_count, vaddr, paddr, page_size, (flags & PTM_FLAG_WRITE) != 0, g_x86_64_cpu_nx_support && (flags & PTM_FLAG_EXEC) == 0);
         paddr += page_size;
         vaddr += page_size;
         offset += page_size;

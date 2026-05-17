@@ -1,4 +1,5 @@
 global x86_64_kernel_handoff
+global x86_64_kernel_handoff_end
 
 ; rdi = entry point
 ; rsi = stack pointer
@@ -37,3 +38,4 @@ x86_64_kernel_handoff:
     popfq
 
     ret
+x86_64_kernel_handoff_end:

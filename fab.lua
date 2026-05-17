@@ -15,14 +15,6 @@ assert(nasm ~= nil, "No nasm found")
 local ld = linker.get_linker("ld.lld")
 assert(ld ~= nil, "No ld.lld found")
 
--- Deps
--- local freestanding_c_headers = fab.git(
---     "freestanding-c-headers",
---     "https://github.com/osdev0/freestnd-c-hdrs-0bsd.git",
---     "097259a"
--- )
--- table.insert(include_dirs, c.include_dir(path(fab.build_dir(), freestanding_c_headers.path, opt_arch .. "/include")))
-
 local limine_protocol = fab.git(
     "limine_protocol",
     "https://github.com/Limine-Bootloader/limine-protocol.git",
@@ -98,35 +90,6 @@ local function get_prekernel_objs(kernel_flags)
 end
 
 
-local function get_kernel_objs(kernel_flags)
-    local kernel_sources = sources(fab.glob("kernel/src/**/*.c", "!kernel/src/arch/**"))
-    table.extend(kernel_sources, sources(fab.glob(path("kernel/src/arch", opt_arch, "**/*.c"))))
-
-    if opt_arch == "x86_64" then
-        table.extend(kernel_sources, sources(fab.glob("kernel/src/arch/x86_64/**/*.asm")))
-    end
-
-    local kernel_include_dirs = {
-        c.include_dir(path("kernel/include/arch/", opt_arch)),
-        c.include_dir("kernel/include"),
-        c.include_dir("common/include"),
-        c.include_dir(path("common/include/arch/", opt_arch)),
-        c.include_dir("pre_kernel/public")
-    }
-
-    local generators = {
-        c = function(sources) return clang:generate(sources, kernel_flags, kernel_include_dirs) end
-    }
-
-    if opt_arch == "x86_64" then
-        local nasm_flags = { "-f", "elf64", "-Werror" }
-        generators.asm = function(sources) return nasm:generate(sources, nasm_flags) end
-    end
-
-    return generate(kernel_sources, generators)
-end
-
-
 local c_flags = {
     "-std=gnu23",
     "-ffreestanding",
@@ -184,33 +147,22 @@ table.extend(kernel_flags, {
     "-Wno-error=unused-function"
 })
 
-local linker_script
+local linker_script = fab.def_source("support/" .. opt_arch .. "-" .. opt_bootloader .. ".lds")
 
-if opt_arch == "x86_64" then
-    linker_script = fab.def_source("support/x86_64-" .. opt_bootloader .. ".lds")
-end
 
 local common_objs = get_common_objs(kernel_flags)
 local prekernel_objs = get_prekernel_objs(kernel_flags)
--- if opt_build_type == "debug" then
---     table.extend(kernel_flags, {
---         "-fsanitize=undefined",
---         "-fstack-protector-all"
---     })
--- end
-
-local kernel_objs = get_kernel_objs(kernel_flags)
 
 table.extend(objects, common_objs)
 table.extend(objects, prekernel_objs)
-table.extend(objects, kernel_objs)
+table.extend(objects, { fab.def_source("kernel.o") })
 
-local kernel = ld:link("kernel.elf", objects, {
+local lunar = ld:link("lunar.elf", objects, {
     "-znoexecstack"
 }, linker_script)
 
 return {
     install = {
-        ["kernel.elf"] = kernel
+        ["lunar.elf"] = lunar
     }
 }

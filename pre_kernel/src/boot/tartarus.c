@@ -32,9 +32,7 @@ void pk_tartarus_start_ap(uint64_t tartarus_core_index, pk_ap_boot_info_t* boot_
 
     pk_log_print_raw("\n");
     pk_log_print("Tartarus protcol version: %u.%u\n", major, minor);
-    if(major != 2) {
-        pk_panic("Unsupported Tartarus protocol version\n");
-    }
+    if(major != 2) { pk_panic("Unsupported Tartarus protocol version\n"); }
 
     for(size_t i = 0; i < tartarus_boot_info->mm_entry_count; i++) {
         tartarus_mm_entry_t* mm_entry = &tartarus_boot_info->mm_entries[i];
@@ -53,13 +51,10 @@ void pk_tartarus_start_ap(uint64_t tartarus_core_index, pk_ap_boot_info_t* boot_
     }
 
     size_t boot_info_block_size = sizeof(bootinfo_t);
-    boot_info_block_size += sizeof(bootinfo_segment_t) * tartarus_boot_info->kernel_segment_count;
     boot_info_block_size += sizeof(bootinfo_framebuffer_t) * tartarus_boot_info->framebuffer_count;
     boot_info_block_size += sizeof(bootinfo_module_t) * tartarus_boot_info->module_count;
 
-    for(size_t i = 0; i < tartarus_boot_info->module_count; i++) {
-        boot_info_block_size += strlen(tartarus_boot_info->modules[i].name) + 1;
-    }
+    for(size_t i = 0; i < tartarus_boot_info->module_count; i++) { boot_info_block_size += strlen(tartarus_boot_info->modules[i].name) + 1; }
 
     boot_info_block_size = MATH_ALIGN_UP(boot_info_block_size, PTM_PAGE_GRANULARITY);
 
@@ -70,15 +65,6 @@ void pk_tartarus_start_ap(uint64_t tartarus_core_index, pk_ap_boot_info_t* boot_
     boot_info->hhdm_size = tartarus_boot_info->hhdm_size;
 
     uintptr_t boot_info_block_pointer = (uintptr_t) boot_info + sizeof(bootinfo_t);
-
-    boot_info->kernel_segment_count = tartarus_boot_info->kernel_segment_count;
-    boot_info->kernel_segments = (bootinfo_segment_t*) boot_info_block_pointer;
-    for(size_t i = 0; i < tartarus_boot_info->kernel_segment_count; i++) {
-        bootinfo_segment_t* segment = (bootinfo_segment_t*) boot_info_block_pointer;
-        // @note: tartarus and the pre-kernel protocol *just so happen* to share this format... wow shocking
-        memcpy(segment, &tartarus_boot_info->kernel_segments[i], sizeof(bootinfo_segment_t));
-        boot_info_block_pointer += sizeof(bootinfo_segment_t);
-    }
 
     boot_info->framebuffer_count = tartarus_boot_info->framebuffer_count;
     boot_info->framebuffers = (bootinfo_framebuffer_t*) boot_info_block_pointer;

@@ -3,18 +3,28 @@
 #include <arch/machine.h>
 #include <arch/msr.h>
 #include <common/mem.h>
+#include <elf.h>
 #include <lib/helpers.h>
 #include <lib/math.h>
 #include <log.h>
 #include <memory/pmm.h>
 #include <memory/ptm.h>
+#include <panic.h>
 #include <protocol/bootinfo.h>
+
+#include "arch/cr.h"
 
 void pk_tartarus_map_kernel();
 
 #define CORE_STACK_PGCNT 16
 
-[[noreturn]] void x86_64_kernel_handoff(void (*entry)(bootinfo_t*, uint64_t core_id), void* stack, uintptr_t page_tables, bootinfo_t* boot_info, uint64_t core_id);
+typedef void (*x86_64_kernel_entry_t)(bootinfo_kernel_entry_point_t entry, void* stack, uintptr_t page_tables, bootinfo_t* boot_info, uint64_t core_id);
+
+extern uint8_t x86_64_kernel_handoff[];
+extern uint8_t x86_64_kernel_handoff_end[];
+
+static x86_64_kernel_entry_t g_boot_trampoline = nullptr;
+static bootinfo_kernel_entry_point_t g_kernel_entry_point;
 
 ATOMIC static uint32_t g_ap_init_lock = 0;
 
@@ -25,11 +35,15 @@ bootinfo_t* g_pk_boot_info = nullptr;
 
     pk_machine_init(boot_info->core_id, (uintptr_t) boot_info->cpu_local);
 
-    x86_64_kernel_handoff(kernel_entry, (void*) boot_info->ap_stack, g_ptm.tplt, nullptr, boot_info->core_id);
+    g_boot_trampoline(g_kernel_entry_point, (void*) boot_info->ap_stack, g_ptm.tplt, nullptr, boot_info->core_id);
+    while(1);
 }
 
 bool pk_tartarus_core_is_bsp(uint64_t tartarus_core_index);
 void pk_tartarus_start_ap(uint64_t tartarus_core_idnex, pk_ap_boot_info_t* boot_info);
+
+extern uint8_t _binary_kernel_elf_start[]; // NOLINT
+extern uint8_t _binary_kernel_elf_end[]; // NOLINT
 
 [[noreturn]] void pk_init(bootinfo_t* boot_info) {
     g_pk_boot_info = boot_info;
@@ -42,55 +56,48 @@ void pk_tartarus_start_ap(uint64_t tartarus_core_idnex, pk_ap_boot_info_t* boot_
 
     pk_ptm_init();
 
-    for(size_t i = 0; i < boot_info->kernel_segment_count; i++) {
-        bootinfo_segment_t segment = boot_info->kernel_segments[i];
-        uint64_t flags = 0;
-        if(segment.flags & BOOTINFO_SEGMENT_FLAG_READ) {
-            flags |= PTM_FLAG_READ;
-        }
-        if(segment.flags & BOOTINFO_SEGMENT_FLAG_WRITE) {
-            flags |= PTM_FLAG_WRITE;
-        }
-        if(segment.flags & BOOTINFO_SEGMENT_FLAG_EXECUTE) {
-            flags |= PTM_FLAG_EXEC;
-        }
-
-        pk_log_print("kernel segment: 0x%lx -> 0x%lx - %zu [%c%c%c]\n", segment.paddr, segment.vaddr, segment.size, (flags & PTM_FLAG_READ) ? 'r' : '-', (flags & PTM_FLAG_WRITE) ? 'w' : '-', (flags & PTM_FLAG_EXEC) ? 'x' : '-');
-        for(uintptr_t i = 0; i < segment.size; i += PTM_PAGE_GRANULARITY) {
-            pk_ptm_map(segment.vaddr + i, segment.paddr + i, PTM_PAGE_GRANULARITY, flags);
-        }
-    }
+    elf_loader_info_t kernel_image_info;
+    if(!elf_load_kernel(&kernel_image_info)) { pk_panic("failed to load kernel elf image"); }
 
     void* stack = (pk_pmm_alloc(CORE_STACK_PGCNT) + boot_info->hhdm_offset) + (CORE_STACK_PGCNT * PTM_PAGE_GRANULARITY);
 
     size_t system_page_count = MATH_ALIGN_UP(boot_info->hhdm_size, PTM_PAGE_GRANULARITY) / PTM_PAGE_GRANULARITY;
-    size_t pagedb_size = MATH_ALIGN_UP(system_page_count * g_bootinfo_pagedb_entry_size, PTM_PAGE_GRANULARITY);
+    size_t pagedb_size = MATH_ALIGN_UP(system_page_count * kernel_image_info.kernel_info->pagedb_entry_size, PTM_PAGE_GRANULARITY);
     void* pagedb = pk_pmm_alloc_ext(pagedb_size / PTM_PAGE_GRANULARITY, PTM_PAGE_GRANULARITY, PMM_MAP_TYPE_USED) + boot_info->hhdm_offset;
-    pk_log_print("pagedb entry size: %zu\n", g_bootinfo_pagedb_entry_size);
+    pk_log_print("pagedb entry size: %zu\n", kernel_image_info.kernel_info->pagedb_entry_size);
 
     boot_info->pfndb_start = (uintptr_t) pagedb;
     boot_info->pfndb_size = pagedb_size;
 
-    size_t cpu_local_block_size = MATH_ALIGN_UP(system_page_count * g_bootinfo_cpulocal_entry_size, PTM_PAGE_GRANULARITY);
+    size_t cpu_local_block_size = MATH_ALIGN_UP(system_page_count * kernel_image_info.kernel_info->cpu_local_size, PTM_PAGE_GRANULARITY);
     void* cpu_local_block = pk_pmm_alloc_ext(cpu_local_block_size / PTM_PAGE_GRANULARITY, PTM_PAGE_GRANULARITY, PMM_MAP_TYPE_USED) + boot_info->hhdm_offset;
-    pk_log_print("cpu_local size: %zu\n", g_bootinfo_cpulocal_entry_size);
+    pk_log_print("cpu_local size: %zu\n", kernel_image_info.kernel_info->cpu_local_size);
 
     void* ap_boot_info_block = pk_pmm_alloc(MATH_ALIGN_UP(sizeof(pk_ap_boot_info_t) * boot_info->core_count, PTM_PAGE_GRANULARITY) / PTM_PAGE_GRANULARITY) + boot_info->hhdm_offset;
 
     uint64_t core_id = 1;
     for(uint64_t i = 0; i < boot_info->core_count; i++) {
-        if(pk_tartarus_core_is_bsp(i)) {
-            continue;
-        }
+        if(pk_tartarus_core_is_bsp(i)) { continue; }
 
         pk_log_print("starting ap %lu\n", i);
 
         pk_ap_boot_info_t* ap_boot_info = &((pk_ap_boot_info_t*) ap_boot_info_block)[i];
-        ap_boot_info->cpu_local = ((uintptr_t) cpu_local_block) + (core_id * g_bootinfo_cpulocal_entry_size);
+        ap_boot_info->cpu_local = ((uintptr_t) cpu_local_block) + (core_id * kernel_image_info.kernel_info->cpu_local_size);
         ap_boot_info->ap_stack = (uintptr_t) (pk_pmm_alloc(CORE_STACK_PGCNT) + boot_info->hhdm_offset) + (CORE_STACK_PGCNT * PTM_PAGE_GRANULARITY);
         ap_boot_info->core_id = core_id++;
         pk_tartarus_start_ap(i, ap_boot_info);
     }
+
+    size_t size = MATH_ALIGN_UP((x86_64_kernel_handoff_end - x86_64_kernel_handoff), PTM_PAGE_GRANULARITY) / PTM_PAGE_GRANULARITY;
+    pk_log_print("boot trampoline size: %zu\n", size);
+    void* boot_trampoline_alloc = pk_pmm_alloc(size);
+    memcpy((void*) ((uintptr_t) boot_trampoline_alloc + g_pk_boot_info->hhdm_offset), (void*) x86_64_kernel_handoff, (x86_64_kernel_handoff_end - x86_64_kernel_handoff));
+
+    uintptr_t current_cr3 = arch_cr_read_cr3();
+    uintptr_t level_count = arch_cr_read_cr4() & (1 << 12) ? 5 : 4;
+    pk_ptm_map_at(current_cr3, level_count, 0x1000, (uintptr_t) boot_trampoline_alloc, size * PTM_PAGE_GRANULARITY, PTM_FLAG_READ | PTM_FLAG_EXEC);
+    pk_ptm_map(0x1000, (uintptr_t) boot_trampoline_alloc, size * PTM_PAGE_GRANULARITY, PTM_FLAG_READ | PTM_FLAG_EXEC);
+    g_boot_trampoline = (x86_64_kernel_entry_t) (0x1000);
 
     pk_ptm_create_hhdm_mappings();
 
@@ -130,11 +137,15 @@ void pk_tartarus_start_ap(uint64_t tartarus_core_idnex, pk_ap_boot_info_t* boot_
         boot_info->mm_entries[i].type = type;
     }
 
-    pk_log_print("cpu_local size: %zu\n", g_bootinfo_cpulocal_entry_size);
+    pk_log_print("cpu_local size: %zu\n", kernel_image_info.kernel_info->cpu_local_size);
 
     pk_machine_init(0, (uintptr_t) cpu_local_block);
 
+    g_kernel_entry_point = kernel_image_info.entry_point;
+    boot_info->kernel_segments = kernel_image_info.segments;
+    boot_info->kernel_segment_count = kernel_image_info.segment_count;
+
     ATOMIC_STORE(&g_ap_init_lock, 1, ATOMIC_RELEASE);
-    x86_64_kernel_handoff(kernel_entry, stack, g_ptm.tplt, boot_info, 0);
+    g_boot_trampoline(g_kernel_entry_point, stack, g_ptm.tplt, boot_info, 0);
     while(1);
 }

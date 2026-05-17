@@ -47,6 +47,19 @@ typedef struct {
     uint64_t p_align;
 } elf64_program_header_t;
 
+typedef struct {
+    uint32_t sh_name;
+    uint32_t sh_type;
+    uint64_t sh_flags;
+    uint64_t sh_addr;
+    uint64_t sh_offset;
+    uint64_t sh_size;
+    uint32_t sh_link;
+    uint32_t sh_info;
+    uint64_t sh_addralign;
+    uint64_t sh_entsize;
+} elf64_section_header_t;
+
 #define PTYPE_LOAD 1
 #define PTYPE_INTERP 3
 #define PTYPE_PHDR 6
@@ -129,6 +142,37 @@ bool internal_elf_load_image(elf_loader_info_t* loader_info) {
         pk_log_print("Loading segment %zu: vaddr=0x%lx, size=%zu\n", i, phdrs[i].p_vaddr, phdrs[i].p_filesz);
         internal_elf_handle_pt_load(&phdrs[i], loader_info);
     }
+
+    if(elf_header->e_shoff == 0 || elf_header->e_shstrndx == 0) {
+        pk_log_print("elf: no section headers or shstrtab; cannot locate prekernel_boot_info\n");
+        return false;
+    }
+
+    elf64_section_header_t* shdrs = (elf64_section_header_t*) (_binary_kernel_elf_start + elf_header->e_shoff);
+    const char* shstrtab = (const char*) (_binary_kernel_elf_start + shdrs[elf_header->e_shstrndx].sh_offset);
+
+    loader_info->kernel_info = nullptr;
+    for(size_t i = 0; i < elf_header->e_shnum; i++) {
+        const char* name = shstrtab + shdrs[i].sh_name;
+        if(memcmp(name, "prekernel_boot_info", sizeof("prekernel_boot_info")) != 0) { continue; }
+
+        uint64_t sh_addr = shdrs[i].sh_addr;
+        for(size_t j = 0; j < loader_info->segment_count; j++) {
+            bootinfo_segment_t* seg = &loader_info->segments[j];
+            if(sh_addr >= seg->vaddr && sh_addr < seg->vaddr + seg->size) {
+                loader_info->kernel_info = (bootinfo_kernel_info_t*) ((uintptr_t) seg->paddr + (sh_addr - seg->vaddr) + g_pk_boot_info->hhdm_offset);
+                break;
+            }
+        }
+        break;
+    }
+
+    if(loader_info->kernel_info == nullptr) {
+        pk_log_print("elf: failed to locate prekernel_boot_info section in kernel image\n");
+        return false;
+    }
+
+    pk_log_print("elf: kernel_info at %p (pagedb_entry_size=%zu, cpu_local_size=%zu)\n", (void*) loader_info->kernel_info, loader_info->kernel_info->pagedb_entry_size, loader_info->kernel_info->cpu_local_size);
 
     return true;
 }

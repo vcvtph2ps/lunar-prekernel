@@ -1,6 +1,8 @@
-# Lunar
+# Lunar Prekernel
 
-Small experimental kernel. (It's really stupid)
+Stupid prekernel for [Lunar](https://github.com/vcvtph2ps/lunar)
+
+Handles setting up machine state and pagedb stuff
 
 Currently only supports x86_64 but may support other architectures in the future.
 

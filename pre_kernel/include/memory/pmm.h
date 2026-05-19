@@ -28,10 +28,10 @@ typedef struct {
 extern size_t g_pmm_map_size;
 extern pmm_map_entry_t g_pmm_map[PMM_MAP_MAX_ENTRIES];
 
-void pk_pmm_map_add(uint64_t base, uint64_t length, pmm_map_type_t type); // NOLINT @todo: fix elysium tidy naming
-void pk_pmm_map_set(uint64_t base, uint64_t length, pmm_map_type_t type, bool force); // NOLINT @todo: fix elysium tidy naming
+void pmm_map_add(uint64_t base, uint64_t length, pmm_map_type_t type);
+void pmm_map_set(uint64_t base, uint64_t length, pmm_map_type_t type, bool force);
 
-[[nodiscard]] bool pk_pmm_alloc_at(uint64_t address, size_t page_count, pmm_map_type_t type); // NOLINT @todo: fix elysium tidy naming
-[[nodiscard]] void* pk_pmm_alloc_ext(size_t page_count, size_t alignment, pmm_map_type_t type); // NOLINT @todo: fix elysium tidy naming
-[[nodiscard]] void* pk_pmm_alloc(size_t page_count); // NOLINT @todo: fix elysium tidy naming
-void pk_pmm_free(void* address, size_t count); // NOLINT @todo: fix elysium tidy naming
+[[nodiscard]] bool pmm_alloc_at(uint64_t address, size_t page_count, pmm_map_type_t type);
+[[nodiscard]] void* pmm_alloc_ext(size_t page_count, size_t alignment, pmm_map_type_t type);
+[[nodiscard]] void* pmm_alloc(size_t page_count);
+void pmm_free(void* address, size_t count);

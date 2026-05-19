@@ -24,7 +24,7 @@ typedef struct {
 
 extern ptm_t g_ptm;
 
-void pk_ptm_init(); // NOLINT @todo: fix elysium tidy naming
-void pk_ptm_map(uint64_t vaddr, uint64_t paddr, uint64_t length, uint8_t flags); // NOLINT @todo: fix elysium tidy naming
-void pk_ptm_map_at(uintptr_t cr3, size_t level_count, uint64_t vaddr, uint64_t paddr, uint64_t length, uint8_t flags); // NOLINT @todo: fix elysium tidy naming
-void pk_ptm_create_hhdm_mappings(); // NOLINT @todo: fix elysium tidy naming
+void ptm_init();
+void ptm_map(uint64_t vaddr, uint64_t paddr, uint64_t length, uint8_t flags);
+void ptm_map_at(uintptr_t cr3, size_t level_count, uint64_t vaddr, uint64_t paddr, uint64_t length, uint8_t flags);
+void ptm_create_hhdm_mappings();

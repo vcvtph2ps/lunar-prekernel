@@ -69,7 +69,7 @@ typedef struct {
 #define PFLAGS_READ (1 << 2)
 #define PTYPE_NOTE 4
 
-extern bootinfo_t* g_pk_boot_info;
+extern bootinfo_t* g_boot_info;
 
 bool elf_supported(const elf64_elf_header_t* elf_header) {
     if(!elf_header) { return false; }
@@ -94,18 +94,18 @@ void internal_elf_handle_pt_load(elf64_program_header_t* phdr, elf_loader_info_t
     uintptr_t start_vaddr = MATH_FLOOR(phdr->p_vaddr, PTM_PAGE_GRANULARITY);
     uintptr_t end_vaddr = MATH_ALIGN_UP(phdr->p_vaddr + phdr->p_memsz, PTM_PAGE_GRANULARITY);
 
-    uintptr_t paddr = (uintptr_t) pk_pmm_alloc_ext((end_vaddr - start_vaddr) / PTM_PAGE_GRANULARITY, PTM_PAGE_GRANULARITY, PMM_MAP_TYPE_ALLOCATED);
+    uintptr_t paddr = (uintptr_t) pmm_alloc_ext((end_vaddr - start_vaddr) / PTM_PAGE_GRANULARITY, PTM_PAGE_GRANULARITY, PMM_MAP_TYPE_ALLOCATED);
 
     for(uintptr_t j = start_vaddr; j < end_vaddr; j += PTM_PAGE_GRANULARITY) {
         uint64_t ptm_flags = 0;
         if(phdr->p_flags & PFLAGS_READ) ptm_flags |= PTM_FLAG_READ;
         if(phdr->p_flags & PFLAGS_WRITE) ptm_flags |= PTM_FLAG_WRITE;
         if(phdr->p_flags & PFLAGS_EXECUTE) ptm_flags |= PTM_FLAG_EXEC;
-        pk_ptm_map(j, paddr + (j - start_vaddr), PTM_PAGE_GRANULARITY, ptm_flags);
+        ptm_map(j, paddr + (j - start_vaddr), PTM_PAGE_GRANULARITY, ptm_flags);
     }
 
-    memset((void*) (paddr + g_pk_boot_info->hhdm_offset), 0, end_vaddr - start_vaddr);
-    memcpy((void*) (paddr + (phdr->p_vaddr - start_vaddr) + g_pk_boot_info->hhdm_offset), (void*) (phdr->p_offset + (uintptr_t) _binary_kernel_elf_start), phdr->p_filesz);
+    memset((void*) (paddr + g_boot_info->hhdm_offset), 0, end_vaddr - start_vaddr);
+    memcpy((void*) (paddr + (phdr->p_vaddr - start_vaddr) + g_boot_info->hhdm_offset), (void*) (phdr->p_offset + (uintptr_t) _binary_kernel_elf_start), phdr->p_filesz);
 
     size_t segment_idx = loader_info->segment_count++;
     loader_info->segments[segment_idx].paddr = paddr + (phdr->p_vaddr - start_vaddr);
@@ -124,27 +124,27 @@ bool internal_elf_load_image(elf_loader_info_t* loader_info) {
         if(phdrs[i].p_type == PTYPE_LOAD) load_count++;
     }
 
-    loader_info->segments = (bootinfo_segment_t*) (pk_pmm_alloc(MATH_ALIGN_UP(load_count * sizeof(bootinfo_segment_t), PTM_PAGE_GRANULARITY) / PTM_PAGE_GRANULARITY) + g_pk_boot_info->hhdm_offset);
+    loader_info->segments = (bootinfo_segment_t*) (pmm_alloc(MATH_ALIGN_UP(load_count * sizeof(bootinfo_segment_t), PTM_PAGE_GRANULARITY) / PTM_PAGE_GRANULARITY) + g_boot_info->hhdm_offset);
     loader_info->segment_count = 0;
 
     for(size_t i = 0; i < elf_header->e_phnum; i++) {
-        pk_log_print("phdr[%ld].p_type = 0x%x\n", i, phdrs[i].p_type);
-        pk_log_print("phdr[%ld].p_vaddr = 0x%lx, p_memsz = 0x%lx, p_filesz = 0x%lx\n", i, phdrs[i].p_vaddr, phdrs[i].p_memsz, phdrs[i].p_filesz);
+        log_print("phdr[%ld].p_type = 0x%x\n", i, phdrs[i].p_type);
+        log_print("phdr[%ld].p_vaddr = 0x%lx, p_memsz = 0x%lx, p_filesz = 0x%lx\n", i, phdrs[i].p_vaddr, phdrs[i].p_memsz, phdrs[i].p_filesz);
     }
 
     // fill out loader info
     loader_info->entry_point = (bootinfo_kernel_entry_point_t) elf_header->e_entry;
-    pk_log_print("elf entry point: 0x%lx\n", (uintptr_t) elf_header->e_entry);
+    log_print("elf entry point: 0x%lx\n", (uintptr_t) elf_header->e_entry);
 
     // load phdrs
     for(size_t i = 0; i < elf_header->e_phnum; i++) {
         if(phdrs[i].p_type != PTYPE_LOAD) { continue; }
-        pk_log_print("Loading segment %zu: vaddr=0x%lx, size=%zu\n", i, phdrs[i].p_vaddr, phdrs[i].p_filesz);
+        log_print("Loading segment %zu: vaddr=0x%lx, size=%zu\n", i, phdrs[i].p_vaddr, phdrs[i].p_filesz);
         internal_elf_handle_pt_load(&phdrs[i], loader_info);
     }
 
     if(elf_header->e_shoff == 0 || elf_header->e_shstrndx == 0) {
-        pk_log_print("elf: no section headers or shstrtab; cannot locate prekernel_boot_info\n");
+        log_print("elf: no section headers or shstrtab; cannot locate prekernel_boot_info\n");
         return false;
     }
 
@@ -160,7 +160,7 @@ bool internal_elf_load_image(elf_loader_info_t* loader_info) {
         for(size_t j = 0; j < loader_info->segment_count; j++) {
             bootinfo_segment_t* seg = &loader_info->segments[j];
             if(sh_addr >= seg->vaddr && sh_addr < seg->vaddr + seg->size) {
-                loader_info->kernel_info = (bootinfo_kernel_info_t*) ((uintptr_t) seg->paddr + (sh_addr - seg->vaddr) + g_pk_boot_info->hhdm_offset);
+                loader_info->kernel_info = (bootinfo_kernel_info_t*) ((uintptr_t) seg->paddr + (sh_addr - seg->vaddr) + g_boot_info->hhdm_offset);
                 break;
             }
         }
@@ -168,11 +168,11 @@ bool internal_elf_load_image(elf_loader_info_t* loader_info) {
     }
 
     if(loader_info->kernel_info == nullptr) {
-        pk_log_print("elf: failed to locate prekernel_boot_info section in kernel image\n");
+        log_print("elf: failed to locate prekernel_boot_info section in kernel image\n");
         return false;
     }
 
-    pk_log_print("elf: kernel_info at %p (pagedb_entry_size=%zu, cpu_local_size=%zu)\n", (void*) loader_info->kernel_info, loader_info->kernel_info->pagedb_entry_size, loader_info->kernel_info->cpu_local_size);
+    log_print("elf: kernel_info at %p (pagedb_entry_size=%zu, cpu_local_size=%zu)\n", (void*) loader_info->kernel_info, loader_info->kernel_info->pagedb_entry_size, loader_info->kernel_info->cpu_local_size);
 
     return true;
 }
@@ -181,14 +181,14 @@ bool internal_elf_load_image(elf_loader_info_t* loader_info) {
 bool elf_load_kernel(elf_loader_info_t* out_info) {
     elf64_elf_header_t* elf_data = (elf64_elf_header_t*) _binary_kernel_elf_start;
     if(!elf_supported(elf_data)) {
-        pk_log_print("Unsupported elf file\n");
+        log_print("Unsupported elf file\n");
         return false;
     }
 
     memset(out_info, 0, sizeof(elf_loader_info_t));
 
     if(!internal_elf_load_image(out_info)) {
-        pk_log_print("Failed to load elf image\n");
+        log_print("Failed to load elf image\n");
         return false;
     }
 

@@ -10,29 +10,29 @@
 #include <stdint.h>
 #include <tartarus.h>
 
-[[noreturn]] void pk_init(bootinfo_t* boot_info);
+[[noreturn]] void prekernel_init(bootinfo_t* boot_info);
 
 static tartarus_boot_info_t* g_tartarus_boot_info;
 
-void pk_init_ap();
+void init_ap();
 
-bool pk_tartarus_core_is_bsp(uint64_t tartarus_core_index) {
+bool tartarus_core_is_bsp(uint64_t tartarus_core_index) {
     return (g_tartarus_boot_info->cpus[tartarus_core_index].flags & TARTARUS_CPU_FLAG_IS_BSP) != 0;
 }
 
-void pk_tartarus_start_ap(uint64_t tartarus_core_index, pk_ap_boot_info_t* boot_info) {
+void tartarus_start_ap(uint64_t tartarus_core_index, ap_boot_info_t* boot_info) {
     *g_tartarus_boot_info->cpus[tartarus_core_index].argument = (uint64_t) boot_info;
-    *g_tartarus_boot_info->cpus[tartarus_core_index].park_address = (uintptr_t) pk_init_ap;
+    *g_tartarus_boot_info->cpus[tartarus_core_index].park_address = (uintptr_t) init_ap;
 }
 
-[[noreturn]] void pk_entry_tartarus(tartarus_boot_info_t* tartarus_boot_info, uint16_t version) {
+[[noreturn]] void prekernel_entry_tartarus(tartarus_boot_info_t* tartarus_boot_info, uint16_t version) {
     g_tartarus_boot_info = tartarus_boot_info;
     uint8_t major = version >> 8;
     uint8_t minor = version & 0xff;
 
-    pk_log_print_raw("\n");
-    pk_log_print("Tartarus protcol version: %u.%u\n", major, minor);
-    if(major != 2) { pk_panic("Unsupported Tartarus protocol version\n"); }
+    log_print_raw("\n");
+    log_print("Tartarus protcol version: %u.%u\n", major, minor);
+    if(major != 2) { panic("Unsupported Tartarus protocol version\n"); }
 
     for(size_t i = 0; i < tartarus_boot_info->mm_entry_count; i++) {
         tartarus_mm_entry_t* mm_entry = &tartarus_boot_info->mm_entries[i];
@@ -45,9 +45,9 @@ void pk_tartarus_start_ap(uint64_t tartarus_core_index, pk_ap_boot_info_t* boot_
             case TARTARUS_MM_TYPE_ACPI_RECLAIMABLE:       type = PMM_MAP_TYPE_ACPI_RECLAIMABLE; break;
             case TARTARUS_MM_TYPE_ACPI_NVS:               type = PMM_MAP_TYPE_ACPI_NVS; break;
             case TARTARUS_MM_TYPE_BAD:                    type = PMM_MAP_TYPE_BAD; break;
-            default:                                      pk_panic("Invalid memory map entry type");
+            default:                                      panic("Invalid memory map entry type");
         }
-        pk_pmm_map_add(mm_entry->base, mm_entry->length, type);
+        pmm_map_add(mm_entry->base, mm_entry->length, type);
     }
 
     size_t boot_info_block_size = sizeof(bootinfo_t);
@@ -58,7 +58,7 @@ void pk_tartarus_start_ap(uint64_t tartarus_core_index, pk_ap_boot_info_t* boot_
 
     boot_info_block_size = MATH_ALIGN_UP(boot_info_block_size, PTM_PAGE_GRANULARITY);
 
-    bootinfo_t* boot_info = (pk_pmm_alloc(boot_info_block_size / PTM_PAGE_GRANULARITY) + tartarus_boot_info->hhdm_offset);
+    bootinfo_t* boot_info = (pmm_alloc(boot_info_block_size / PTM_PAGE_GRANULARITY) + tartarus_boot_info->hhdm_offset);
     boot_info->boot_timestamp = tartarus_boot_info->boot_timestamp;
     boot_info->rdsp_physical = tartarus_boot_info->acpi_rsdp_address;
     boot_info->hhdm_offset = tartarus_boot_info->hhdm_offset;
@@ -106,6 +106,6 @@ void pk_tartarus_start_ap(uint64_t tartarus_core_index, pk_ap_boot_info_t* boot_
         module->size = tartarus_module->size;
     }
 
-    pk_init(boot_info);
+    prekernel_init(boot_info);
     while(1);
 }

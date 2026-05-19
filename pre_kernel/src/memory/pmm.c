@@ -8,7 +8,7 @@ size_t g_pmm_map_size;
 pmm_map_entry_t g_pmm_map[PMM_MAP_MAX_ENTRIES];
 
 static void map_insert(int index, pmm_map_entry_t entry) {
-    if(g_pmm_map_size == PMM_MAP_MAX_ENTRIES) pk_panic("memory map overflow");
+    if(g_pmm_map_size == PMM_MAP_MAX_ENTRIES) panic("memory map overflow");
     for(int i = g_pmm_map_size; i > index; i--) g_pmm_map[i] = g_pmm_map[i - 1];
     g_pmm_map[index] = entry;
     g_pmm_map_size++;
@@ -19,7 +19,7 @@ static void map_delete(size_t index) {
     g_pmm_map_size--;
 }
 
-void pk_pmm_map_set(uint64_t base, uint64_t length, pmm_map_type_t type, bool force) {
+void pmm_map_set(uint64_t base, uint64_t length, pmm_map_type_t type, bool force) {
     for(size_t i = 0; i < g_pmm_map_size; i++) {
         pmm_map_entry_t* map_entry = &g_pmm_map[i];
 
@@ -40,7 +40,7 @@ void pk_pmm_map_set(uint64_t base, uint64_t length, pmm_map_type_t type, bool fo
 
             map_entry->base = start_base;
             map_entry->length = start_length;
-            pk_pmm_map_set(end_base, end_length, map_entry->type, true);
+            pmm_map_set(end_base, end_length, map_entry->type, true);
             continue;
         }
 
@@ -88,8 +88,8 @@ void pk_pmm_map_set(uint64_t base, uint64_t length, pmm_map_type_t type, bool fo
             size_t end_base = map_entry->base + map_entry->length;
             size_t end_length = (base + length) - end_base;
 
-            pk_pmm_map_set(start_base, start_length, type, force);
-            pk_pmm_map_set(end_base, end_length, type, force);
+            pmm_map_set(start_base, start_length, type, force);
+            pmm_map_set(end_base, end_length, type, force);
             return;
         }
 
@@ -117,24 +117,24 @@ void pk_pmm_map_set(uint64_t base, uint64_t length, pmm_map_type_t type, bool fo
     map_insert(i, (pmm_map_entry_t) { .base = base, .length = length, .type = type });
 }
 
-void pk_pmm_map_add(uint64_t base, uint64_t length, pmm_map_type_t type) {
+void pmm_map_add(uint64_t base, uint64_t length, pmm_map_type_t type) {
     if(length == 0) return;
-    pk_pmm_map_set(base, length, type, false);
+    pmm_map_set(base, length, type, false);
 }
 
-bool pk_pmm_alloc_at(uint64_t address, size_t page_count, pmm_map_type_t type) {
+bool pmm_alloc_at(uint64_t address, size_t page_count, pmm_map_type_t type) {
     size_t length = page_count * PTM_PAGE_GRANULARITY;
     for(size_t i = 0; i < g_pmm_map_size; i++) {
         if(g_pmm_map[i].type != PMM_MAP_TYPE_FREE) continue;
         if(g_pmm_map[i].base > address || g_pmm_map[i].base + g_pmm_map[i].length < address + length) continue;
 
-        pk_pmm_map_set(address, length, type, true);
+        pmm_map_set(address, length, type, true);
         return true;
     }
     return false;
 }
 
-void* pk_pmm_alloc_ext(size_t page_count, size_t alignment, pmm_map_type_t type) {
+void* pmm_alloc_ext(size_t page_count, size_t alignment, pmm_map_type_t type) {
     size_t length = page_count * PTM_PAGE_GRANULARITY;
     for(size_t i = 0; i < g_pmm_map_size; i++) {
         if(g_pmm_map[i].type != PMM_MAP_TYPE_FREE) continue;
@@ -142,17 +142,17 @@ void* pk_pmm_alloc_ext(size_t page_count, size_t alignment, pmm_map_type_t type)
         if(ue_base >= g_pmm_map[i].base + g_pmm_map[i].length) continue;
         uint64_t ue_length = g_pmm_map[i].length - (ue_base - g_pmm_map[i].base);
         if(ue_length < length) continue; // claim does not fit inside entry
-        pk_pmm_map_set(ue_base, length, type, true);
+        pmm_map_set(ue_base, length, type, true);
         return (void*) (uintptr_t) ue_base;
     }
-    pk_panic("out of memory");
+    panic("out of memory");
     __builtin_unreachable();
 }
 
-void* pk_pmm_alloc(size_t page_count) {
-    return pk_pmm_alloc_ext(page_count, PTM_PAGE_GRANULARITY, PMM_MAP_TYPE_ALLOCATED);
+void* pmm_alloc(size_t page_count) {
+    return pmm_alloc_ext(page_count, PTM_PAGE_GRANULARITY, PMM_MAP_TYPE_ALLOCATED);
 }
 
-void pk_pmm_free(void* address, size_t page_count) {
-    pk_pmm_map_set((uint64_t) (uintptr_t) address, page_count * PTM_PAGE_GRANULARITY, PMM_MAP_TYPE_FREE, true);
+void pmm_free(void* address, size_t page_count) {
+    pmm_map_set((uint64_t) (uintptr_t) address, page_count * PTM_PAGE_GRANULARITY, PMM_MAP_TYPE_FREE, true);
 }

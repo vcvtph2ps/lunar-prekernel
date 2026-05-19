@@ -1,12 +1,12 @@
 #include <log.h>
 #include <stdarg.h>
 
-[[noreturn]] void pk_panic(const char* format, ...) {
+[[noreturn]] void panic(const char* format, ...) {
     va_list args;
     va_start(args, message);
-    pk_log_print("prekernel panic: ");
-    pk_log_vprint_raw(format, args);
-    pk_log_print_raw("\n");
+    log_print("prekernel panic: ");
+    log_vprint_raw(format, args);
+    log_print_raw("\n");
     va_end(args);
     while(1);
 }

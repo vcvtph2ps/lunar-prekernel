@@ -9,7 +9,7 @@
 #include <panic.h>
 #include <protocol/bootinfo.h>
 
-extern bootinfo_t* g_pk_boot_info;
+extern bootinfo_t* g_boot_info;
 
 #define ENTRY_FLAG_PRESENT (1 << 0)
 #define ENTRY_FLAG_RW (1 << 1)
@@ -27,14 +27,14 @@ ptm_t g_ptm = {};
 static bool g_x86_64_cpu_nx_support = false;
 static bool g_x86_64_cpu_pdpe1gb_support = false;
 
-void pk_ptm_init() {
-    uintptr_t top_pagemap = (uintptr_t) pk_pmm_alloc(1);
-    memset((void*) (top_pagemap + g_pk_boot_info->hhdm_offset), 0, PTM_PAGE_GRANULARITY);
+void ptm_init() {
+    uintptr_t top_pagemap = (uintptr_t) pmm_alloc(1);
+    memset((void*) (top_pagemap + g_boot_info->hhdm_offset), 0, PTM_PAGE_GRANULARITY);
     if(arch_cpuid_is_feature_supported(ARCH_CPUID_FEATURE_LA57)) {
         if(arch_cr_read_cr4() & (1 << 12)) {
             g_ptm.level_count = 5;
         } else {
-            pk_log_print("LA57 supported but not enabled, falling back to 4-level paging\n");
+            log_print("LA57 supported but not enabled, falling back to 4-level paging\n");
             g_ptm.level_count = 4;
         }
     } else {
@@ -46,7 +46,7 @@ void pk_ptm_init() {
     g_x86_64_cpu_nx_support = arch_cpuid_is_feature_supported(ARCH_CPUID_FEATURE_NX_PAGES);
     g_x86_64_cpu_pdpe1gb_support = arch_cpuid_is_feature_supported(ARCH_CPUID_FEATURE_PDPE1GB_PAGES);
 
-    pk_log_print("ptm init: level=%zu, nx %s, pdpe1gb %s\n", g_ptm.level_count, g_x86_64_cpu_nx_support ? "available" : "not available", g_x86_64_cpu_pdpe1gb_support ? "available" : "not available");
+    log_print("ptm init: level=%zu, nx %s, pdpe1gb %s\n", g_ptm.level_count, g_x86_64_cpu_nx_support ? "available" : "not available", g_x86_64_cpu_pdpe1gb_support ? "available" : "not available");
 }
 
 
@@ -58,25 +58,25 @@ static void map_page(uintptr_t cr3, size_t level_count, uint64_t vaddr, uint64_t
         case PTM_PAGE_SIZE_1G: lowest_level = 3; break;
     }
 
-    uint64_t* current_table = (uint64_t*) (cr3 + g_pk_boot_info->hhdm_offset);
+    uint64_t* current_table = (uint64_t*) (cr3 + g_boot_info->hhdm_offset);
     for(int level = level_count; level > lowest_level; level--) {
         int index = VADDR_TO_INDEX(vaddr, level);
 
         uint64_t entry = current_table[index];
         if((entry & ENTRY_FLAG_PRESENT) == 0) {
-            uint64_t* new_table = pk_pmm_alloc(1);
-            memset((void*) (((uintptr_t) new_table) + g_pk_boot_info->hhdm_offset), 0, PTM_PAGE_GRANULARITY);
+            uint64_t* new_table = pmm_alloc(1);
+            memset((void*) (((uintptr_t) new_table) + g_boot_info->hhdm_offset), 0, PTM_PAGE_GRANULARITY);
             entry = ENTRY_FLAG_PRESENT | ((uint64_t) (uintptr_t) new_table & ENTRY_4K_ADDRESS_MASK);
             if(nx) entry |= ENTRY_FLAG_NX;
         } else {
-            if((entry & ENTRYH_FLAG_PS) != 0) pk_panic("cannot remap over a non-4k page %lx", entry & ENTRY_4K_ADDRESS_MASK);
+            if((entry & ENTRYH_FLAG_PS) != 0) panic("cannot remap over a non-4k page %lx", entry & ENTRY_4K_ADDRESS_MASK);
             if(!nx) entry &= ~ENTRY_FLAG_NX;
         }
         if(rw) entry |= ENTRY_FLAG_RW;
 
         if(current_table[index] != entry) current_table[index] = entry;
 
-        current_table = (uint64_t*) ((entry & ENTRY_4K_ADDRESS_MASK) + g_pk_boot_info->hhdm_offset);
+        current_table = (uint64_t*) ((entry & ENTRY_4K_ADDRESS_MASK) + g_boot_info->hhdm_offset);
     }
 
     int index = VADDR_TO_INDEX(vaddr, lowest_level);
@@ -95,9 +95,9 @@ static void map_page(uintptr_t cr3, size_t level_count, uint64_t vaddr, uint64_t
     current_table[index] = entry;
 }
 
-void pk_ptm_map(uint64_t vaddr, uint64_t paddr, uint64_t length, uint8_t flags) {
-    if(paddr % PTM_PAGE_GRANULARITY != 0 || vaddr % PTM_PAGE_GRANULARITY != 0 || length % PTM_PAGE_GRANULARITY != 0) pk_panic("unaligned mapping (%lx -> %lx / %lx)", paddr, vaddr, length);
-    if((flags & PTM_FLAG_READ) == 0) pk_log_print("mapping with no read permission\n");
+void ptm_map(uint64_t vaddr, uint64_t paddr, uint64_t length, uint8_t flags) {
+    if(paddr % PTM_PAGE_GRANULARITY != 0 || vaddr % PTM_PAGE_GRANULARITY != 0 || length % PTM_PAGE_GRANULARITY != 0) panic("unaligned mapping (%lx -> %lx / %lx)", paddr, vaddr, length);
+    if((flags & PTM_FLAG_READ) == 0) log_print("mapping with no read permission\n");
 
     uint64_t offset = 0;
     while(offset < length) {
@@ -112,9 +112,9 @@ void pk_ptm_map(uint64_t vaddr, uint64_t paddr, uint64_t length, uint8_t flags) 
     }
 }
 
-void pk_ptm_map_at(uintptr_t cr3, size_t level_count, uint64_t vaddr, uint64_t paddr, uint64_t length, uint8_t flags) {
-    if(paddr % PTM_PAGE_GRANULARITY != 0 || vaddr % PTM_PAGE_GRANULARITY != 0 || length % PTM_PAGE_GRANULARITY != 0) pk_panic("unaligned mapping (%lx -> %lx / %lx)", paddr, vaddr, length);
-    if((flags & PTM_FLAG_READ) == 0) pk_log_print("mapping with no read permission\n");
+void ptm_map_at(uintptr_t cr3, size_t level_count, uint64_t vaddr, uint64_t paddr, uint64_t length, uint8_t flags) {
+    if(paddr % PTM_PAGE_GRANULARITY != 0 || vaddr % PTM_PAGE_GRANULARITY != 0 || length % PTM_PAGE_GRANULARITY != 0) panic("unaligned mapping (%lx -> %lx / %lx)", paddr, vaddr, length);
+    if((flags & PTM_FLAG_READ) == 0) log_print("mapping with no read permission\n");
 
     uint64_t offset = 0;
     while(offset < length) {
@@ -129,9 +129,9 @@ void pk_ptm_map_at(uintptr_t cr3, size_t level_count, uint64_t vaddr, uint64_t p
     }
 }
 
-void pk_ptm_create_hhdm_mappings() {
+void ptm_create_hhdm_mappings() {
     size_t frozen_map_size = g_pmm_map_size;
-    pmm_map_entry_t* frozen_map = pk_pmm_alloc(MATH_ALIGN_UP(sizeof(pmm_map_entry_t) * frozen_map_size, PTM_PAGE_GRANULARITY) / PTM_PAGE_GRANULARITY);
+    pmm_map_entry_t* frozen_map = pmm_alloc(MATH_ALIGN_UP(sizeof(pmm_map_entry_t) * frozen_map_size, PTM_PAGE_GRANULARITY) / PTM_PAGE_GRANULARITY);
     memcpy(frozen_map, &g_pmm_map, sizeof(pmm_map_entry_t) * frozen_map_size);
 
     for(size_t i = 0; i < g_pmm_map_size; i++) {
@@ -152,6 +152,6 @@ void pk_ptm_create_hhdm_mappings() {
         }
         if(length % PTM_PAGE_GRANULARITY != 0) length += PTM_PAGE_GRANULARITY - length % PTM_PAGE_GRANULARITY;
 
-        pk_ptm_map(g_pk_boot_info->hhdm_offset + base, base, length, PTM_FLAG_READ | PTM_FLAG_WRITE);
+        ptm_map(g_boot_info->hhdm_offset + base, base, length, PTM_FLAG_READ | PTM_FLAG_WRITE);
     }
 }

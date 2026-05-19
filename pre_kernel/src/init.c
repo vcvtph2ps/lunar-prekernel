@@ -14,7 +14,6 @@
 
 #include "arch/cr.h"
 
-void pk_tartarus_map_kernel();
 
 #define CORE_STACK_PGCNT 16
 

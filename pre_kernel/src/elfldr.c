@@ -1,5 +1,5 @@
 #include <common/mem.h>
-#include <elf.h>
+#include <elfldr.h>
 #include <lib/math.h>
 #include <memory/pmm.h>
 #include <memory/ptm.h>
@@ -84,7 +84,7 @@ bool elf_supported(const elf64_elf_header_t* elf_header) {
 extern uint8_t _binary_kernel_elf_start[]; // NOLINT
 extern uint8_t _binary_kernel_elf_end[]; // NOLINT
 
-void internal_elf_handle_pt_load(elf64_program_header_t* phdr, elf_loader_info_t* loader_info) {
+void internal_elf_handle_pt_load(elf64_program_header_t* phdr, elfldr_loader_info_t* loader_info) {
     uint64_t flags = 0;
 
     if(phdr->p_flags & PFLAGS_READ) { flags |= BOOTINFO_SEGMENT_FLAG_READ; }
@@ -114,7 +114,7 @@ void internal_elf_handle_pt_load(elf64_program_header_t* phdr, elf_loader_info_t
     loader_info->segments[segment_idx].flags = flags;
 }
 
-bool internal_elf_load_image(elf_loader_info_t* loader_info) {
+bool internal_elf_load_image(elfldr_loader_info_t* loader_info) {
     // cache phdrs so we don't have to read them multiple times
     elf64_elf_header_t* elf_header = (elf64_elf_header_t*) _binary_kernel_elf_start;
 
@@ -178,14 +178,14 @@ bool internal_elf_load_image(elf_loader_info_t* loader_info) {
 }
 
 
-bool elf_load_kernel(elf_loader_info_t* out_info) {
+bool elfldr_load_kernel(elfldr_loader_info_t* out_info) {
     elf64_elf_header_t* elf_data = (elf64_elf_header_t*) _binary_kernel_elf_start;
     if(!elf_supported(elf_data)) {
         log_print("Unsupported elf file\n");
         return false;
     }
 
-    memset(out_info, 0, sizeof(elf_loader_info_t));
+    memset(out_info, 0, sizeof(elfldr_loader_info_t));
 
     if(!internal_elf_load_image(out_info)) {
         log_print("Failed to load elf image\n");

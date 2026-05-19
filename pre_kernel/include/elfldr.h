@@ -9,6 +9,6 @@ typedef struct {
     size_t segment_count;
 
     bootinfo_kernel_info_t* kernel_info;
-} elf_loader_info_t;
+} elfldr_loader_info_t;
 
-bool elf_load_kernel(elf_loader_info_t* out_info);
+bool elfldr_load_kernel(elfldr_loader_info_t* out_info);

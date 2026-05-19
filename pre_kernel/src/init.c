@@ -3,7 +3,7 @@
 #include <arch/machine.h>
 #include <arch/msr.h>
 #include <common/mem.h>
-#include <elf.h>
+#include <elfldr.h>
 #include <lib/helpers.h>
 #include <lib/math.h>
 #include <log.h>
@@ -55,8 +55,8 @@ extern uint8_t _binary_kernel_elf_end[]; // NOLINT
 
     ptm_init();
 
-    elf_loader_info_t kernel_image_info;
-    if(!elf_load_kernel(&kernel_image_info)) { panic("failed to load kernel elf image"); }
+    elfldr_loader_info_t kernel_image_info;
+    if(!elfldr_load_kernel(&kernel_image_info)) { panic("failed to load kernel elf image"); }
 
     void* stack = (pmm_alloc(CORE_STACK_PGCNT) + boot_info->hhdm_offset) + (CORE_STACK_PGCNT * PTM_PAGE_GRANULARITY);
 

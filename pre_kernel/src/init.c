@@ -7,6 +7,7 @@
 #include <lib/helpers.h>
 #include <lib/math.h>
 #include <log.h>
+#include <memory/pagedb.h>
 #include <memory/pmm.h>
 #include <memory/ptm.h>
 #include <panic.h>
@@ -61,17 +62,17 @@ extern uint8_t _binary_kernel_elf_end[]; // NOLINT
     void* stack = (pmm_alloc(CORE_STACK_PGCNT) + boot_info->hhdm_offset) + (CORE_STACK_PGCNT * PTM_PAGE_GRANULARITY);
 
     size_t system_page_count = MATH_ALIGN_UP(boot_info->hhdm_size, PTM_PAGE_GRANULARITY) / PTM_PAGE_GRANULARITY;
-    size_t pagedb_size = MATH_ALIGN_UP(system_page_count * kernel_image_info.kernel_info->pagedb_entry_size, PTM_PAGE_GRANULARITY);
-    void* pagedb = pmm_alloc_ext(pagedb_size / PTM_PAGE_GRANULARITY, PTM_PAGE_GRANULARITY, PMM_MAP_TYPE_USED) + boot_info->hhdm_offset;
-    log_print("pagedb entry size: %zu\n", kernel_image_info.kernel_info->pagedb_entry_size);
 
-    boot_info->pfndb_start = (uintptr_t) pagedb;
-    boot_info->pfndb_size = pagedb_size;
+    uintptr_t pfndb_start;
+    size_t pfndb_size;
+    pagedb_setup(kernel_image_info.kernel_base, kernel_image_info.kernel_info->pagedb_entry_size, &pfndb_start, &pfndb_size);
+    boot_info->pfndb_start = pfndb_start;
+    boot_info->pfndb_size = pfndb_size;
 
     size_t cpu_local_block_size = MATH_ALIGN_UP(system_page_count * kernel_image_info.kernel_info->cpu_local_size, PTM_PAGE_GRANULARITY);
     void* cpu_local_block = pmm_alloc_ext(cpu_local_block_size / PTM_PAGE_GRANULARITY, PTM_PAGE_GRANULARITY, PMM_MAP_TYPE_USED) + boot_info->hhdm_offset;
     log_print("cpu_local size: %zu\n", kernel_image_info.kernel_info->cpu_local_size);
-
+    memset(cpu_local_block, 0, cpu_local_block_size);
     void* ap_boot_info_block = pmm_alloc(MATH_ALIGN_UP(sizeof(ap_boot_info_t) * boot_info->core_count, PTM_PAGE_GRANULARITY) / PTM_PAGE_GRANULARITY) + boot_info->hhdm_offset;
 
     uint64_t core_id = 1;

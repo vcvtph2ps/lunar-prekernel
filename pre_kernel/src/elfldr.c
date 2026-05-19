@@ -3,6 +3,7 @@
 #include <lib/math.h>
 #include <memory/pmm.h>
 #include <memory/ptm.h>
+#include <stdint.h>
 
 #include "log.h"
 #include "protocol/bootinfo.h"
@@ -112,6 +113,8 @@ void internal_elf_handle_pt_load(elf64_program_header_t* phdr, elfldr_loader_inf
     loader_info->segments[segment_idx].vaddr = phdr->p_vaddr;
     loader_info->segments[segment_idx].size = phdr->p_memsz;
     loader_info->segments[segment_idx].flags = flags;
+
+    if(loader_info->kernel_base > phdr->p_vaddr) { loader_info->kernel_base = phdr->p_vaddr; }
 }
 
 bool internal_elf_load_image(elfldr_loader_info_t* loader_info) {
@@ -186,7 +189,7 @@ bool elfldr_load_kernel(elfldr_loader_info_t* out_info) {
     }
 
     memset(out_info, 0, sizeof(elfldr_loader_info_t));
-
+    out_info->kernel_base = UINTPTR_MAX;
     if(!internal_elf_load_image(out_info)) {
         log_print("Failed to load elf image\n");
         return false;

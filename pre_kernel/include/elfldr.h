@@ -4,6 +4,7 @@
 
 typedef struct {
     bootinfo_kernel_entry_point_t entry_point;
+    uintptr_t kernel_base;
 
     bootinfo_segment_t* segments;
     size_t segment_count;

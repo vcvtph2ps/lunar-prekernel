@@ -127,7 +127,7 @@ bool internal_elf_load_image(elfldr_loader_info_t* loader_info) {
         if(phdrs[i].p_type == PTYPE_LOAD) load_count++;
     }
 
-    loader_info->segments = (bootinfo_segment_t*) (pmm_alloc(MATH_ALIGN_UP(load_count * sizeof(bootinfo_segment_t), PTM_PAGE_GRANULARITY) / PTM_PAGE_GRANULARITY) + g_boot_info->hhdm_offset);
+    loader_info->segments = (bootinfo_segment_t*) ((uintptr_t) pmm_alloc(MATH_ALIGN_UP(load_count * sizeof(bootinfo_segment_t), PTM_PAGE_GRANULARITY) / PTM_PAGE_GRANULARITY) + g_boot_info->hhdm_offset);
     loader_info->segment_count = 0;
 
     for(size_t i = 0; i < elf_header->e_phnum; i++) {

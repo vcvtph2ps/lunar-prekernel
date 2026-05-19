@@ -58,7 +58,7 @@ void tartarus_start_ap(uint64_t tartarus_core_index, ap_boot_info_t* boot_info) 
 
     boot_info_block_size = MATH_ALIGN_UP(boot_info_block_size, PTM_PAGE_GRANULARITY);
 
-    bootinfo_t* boot_info = (pmm_alloc(boot_info_block_size / PTM_PAGE_GRANULARITY) + tartarus_boot_info->hhdm_offset);
+    bootinfo_t* boot_info = (bootinfo_t*) ((uintptr_t) pmm_alloc(boot_info_block_size / PTM_PAGE_GRANULARITY) + tartarus_boot_info->hhdm_offset);
     boot_info->boot_timestamp = tartarus_boot_info->boot_timestamp;
     boot_info->rdsp_physical = tartarus_boot_info->acpi_rsdp_address;
     boot_info->hhdm_offset = tartarus_boot_info->hhdm_offset;

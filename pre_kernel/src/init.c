@@ -18,7 +18,7 @@
 
 #define CORE_STACK_PGCNT 16
 
-typedef void (*x86_64_kernel_entry_t)(bootinfo_kernel_entry_point_t entry, void* stack, uintptr_t page_tables, bootinfo_t* boot_info, uint64_t core_id);
+typedef void (*x86_64_kernel_entry_t)(bootinfo_kernel_entry_point_t entry, uintptr_t stack, uintptr_t page_tables, bootinfo_t* boot_info, uint64_t core_id);
 
 extern uint8_t x86_64_kernel_handoff[];
 extern uint8_t x86_64_kernel_handoff_end[];
@@ -35,7 +35,7 @@ bootinfo_t* g_boot_info = nullptr;
 
     arch_machine_init(boot_info->core_id, (uintptr_t) boot_info->cpu_local);
 
-    g_boot_trampoline(g_kernel_entry_point, (void*) boot_info->ap_stack, g_ptm.tplt, nullptr, boot_info->core_id);
+    g_boot_trampoline(g_kernel_entry_point, boot_info->ap_stack, g_ptm.tplt, nullptr, boot_info->core_id);
     while(1);
 }
 
@@ -59,7 +59,7 @@ extern uint8_t _binary_kernel_elf_end[]; // NOLINT
     elfldr_loader_info_t kernel_image_info;
     if(!elfldr_load_kernel(&kernel_image_info)) { panic("failed to load kernel elf image"); }
 
-    void* stack = (pmm_alloc(CORE_STACK_PGCNT) + boot_info->hhdm_offset) + (CORE_STACK_PGCNT * PTM_PAGE_GRANULARITY);
+    uintptr_t stack = ((uintptr_t) pmm_alloc(CORE_STACK_PGCNT) + boot_info->hhdm_offset) + (CORE_STACK_PGCNT * PTM_PAGE_GRANULARITY);
 
     size_t system_page_count = MATH_ALIGN_UP(boot_info->hhdm_size, PTM_PAGE_GRANULARITY) / PTM_PAGE_GRANULARITY;
 
@@ -70,10 +70,10 @@ extern uint8_t _binary_kernel_elf_end[]; // NOLINT
     boot_info->pfndb_size = pfndb_size;
 
     size_t cpu_local_block_size = MATH_ALIGN_UP(system_page_count * kernel_image_info.kernel_info->cpu_local_size, PTM_PAGE_GRANULARITY);
-    void* cpu_local_block = pmm_alloc_ext(cpu_local_block_size / PTM_PAGE_GRANULARITY, PTM_PAGE_GRANULARITY, PMM_MAP_TYPE_USED) + boot_info->hhdm_offset;
+    void* cpu_local_block = (void*) ((uintptr_t) pmm_alloc_ext(cpu_local_block_size / PTM_PAGE_GRANULARITY, PTM_PAGE_GRANULARITY, PMM_MAP_TYPE_USED) + boot_info->hhdm_offset);
     log_print("cpu_local size: %zu\n", kernel_image_info.kernel_info->cpu_local_size);
     memset(cpu_local_block, 0, cpu_local_block_size);
-    void* ap_boot_info_block = pmm_alloc(MATH_ALIGN_UP(sizeof(ap_boot_info_t) * boot_info->core_count, PTM_PAGE_GRANULARITY) / PTM_PAGE_GRANULARITY) + boot_info->hhdm_offset;
+    void* ap_boot_info_block = (void*) ((uintptr_t) pmm_alloc(MATH_ALIGN_UP(sizeof(ap_boot_info_t) * boot_info->core_count, PTM_PAGE_GRANULARITY) / PTM_PAGE_GRANULARITY) + boot_info->hhdm_offset);
 
     uint64_t core_id = 1;
     for(uint64_t i = 0; i < boot_info->core_count; i++) {
@@ -83,7 +83,7 @@ extern uint8_t _binary_kernel_elf_end[]; // NOLINT
 
         ap_boot_info_t* ap_boot_info = &((ap_boot_info_t*) ap_boot_info_block)[i];
         ap_boot_info->cpu_local = ((uintptr_t) cpu_local_block) + (core_id * kernel_image_info.kernel_info->cpu_local_size);
-        ap_boot_info->ap_stack = (uintptr_t) (pmm_alloc(CORE_STACK_PGCNT) + boot_info->hhdm_offset) + (CORE_STACK_PGCNT * PTM_PAGE_GRANULARITY);
+        ap_boot_info->ap_stack = ((uintptr_t) pmm_alloc(CORE_STACK_PGCNT) + boot_info->hhdm_offset) + (CORE_STACK_PGCNT * PTM_PAGE_GRANULARITY);
         ap_boot_info->core_id = core_id++;
         tartarus_start_ap(i, ap_boot_info);
     }
@@ -105,7 +105,7 @@ extern uint8_t _binary_kernel_elf_end[]; // NOLINT
     void* memory_map_block;
     while(true) {
         size_t memory_map_block_size = MATH_ALIGN_UP(pmm_map_entries, PTM_PAGE_GRANULARITY);
-        memory_map_block = pmm_alloc(memory_map_block_size / PTM_PAGE_GRANULARITY) + boot_info->hhdm_offset;
+        memory_map_block = (void*) ((uintptr_t) pmm_alloc(memory_map_block_size / PTM_PAGE_GRANULARITY) + boot_info->hhdm_offset);
         if(g_pmm_map_size > pmm_map_entries) {
             pmm_free(memory_map_block, memory_map_block_size / PTM_PAGE_GRANULARITY);
             pmm_map_entries *= 2;

@@ -27,37 +27,6 @@ local tartarus_protocol = fab.git(
     "d1ecb3dd137ecfb08ac15b6b8fc5233a9daefd97"
 )
 
-
-local function get_common_objs(kernel_flags)
-    local common_sources = sources(fab.glob("common/src/**/*.c", "!common/src/arch/**"))
-    table.extend(common_sources, sources(fab.glob(path("common/src/arch", opt_arch, "**/*.c"))))
-
-    if opt_arch == "x86_64" then
-        table.extend(common_sources, sources(fab.glob("common/src/arch/x86_64/**/*.asm")))
-    end
-
-    local common_include_dirs = {
-        c.include_dir(path("common/include/arch/", opt_arch)),
-        c.include_dir("common/include"),
-        c.include_dir(path("common/include/arch/", opt_arch)),
-    }
-
-    table.insert(common_include_dirs, c.include_dir(path(fab.build_dir(), limine_protocol.path, "include")))
-    table.insert(common_include_dirs, c.include_dir(path(fab.build_dir(), tartarus_protocol.path)))
-
-    local generators = {
-        c = function(sources) return clang:generate(sources, kernel_flags, common_include_dirs) end
-    }
-
-    if opt_arch == "x86_64" then
-        local nasm_flags = { "-f", "elf64", "-Werror" }
-        generators.asm = function(sources) return nasm:generate(sources, nasm_flags) end
-    end
-
-    return generate(common_sources, generators)
-end
-
-
 local function get_prekernel_objs(kernel_flags)
     local pre_kernel_sources = sources(fab.glob("pre_kernel/src/**/*.c", "!pre_kernel/src/arch/**"))
     table.extend(pre_kernel_sources, sources(fab.glob(path("pre_kernel/src/arch", opt_arch, "**/*.c"))))
@@ -69,8 +38,6 @@ local function get_prekernel_objs(kernel_flags)
     local pre_kernel_include_dirs = {
         c.include_dir(path("pre_kernel/include/arch/", opt_arch)),
         c.include_dir("pre_kernel/include"),
-        c.include_dir("common/include"),
-        c.include_dir(path("common/include/arch/", opt_arch)),
         c.include_dir("pre_kernel/public")
     }
 
@@ -149,11 +116,8 @@ table.extend(kernel_flags, {
 
 local linker_script = fab.def_source("support/" .. opt_arch .. "-" .. opt_bootloader .. ".lds")
 
-
-local common_objs = get_common_objs(kernel_flags)
 local prekernel_objs = get_prekernel_objs(kernel_flags)
 
-table.extend(objects, common_objs)
 table.extend(objects, prekernel_objs)
 table.extend(objects, { fab.def_source("kernel.o") })
 

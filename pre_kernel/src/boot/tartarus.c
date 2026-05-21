@@ -20,11 +20,13 @@ bool tartarus_core_is_bsp(uint64_t tartarus_core_index) {
     return (g_tartarus_boot_info->cpus[tartarus_core_index].flags & TARTARUS_CPU_FLAG_IS_BSP) != 0;
 }
 
+__attribute__((no_sanitize("undefined"))) // @todo: tartarus misaligned pointer bug
 void tartarus_start_ap(uint64_t tartarus_core_index, ap_boot_info_t* boot_info) {
     *g_tartarus_boot_info->cpus[tartarus_core_index].argument = (uint64_t) boot_info;
     *g_tartarus_boot_info->cpus[tartarus_core_index].park_address = (uintptr_t) init_ap;
 }
 
+__attribute__((no_sanitize("undefined"))) // @todo: tartarus misaligned pointer bug
 [[noreturn]] void prekernel_entry_tartarus(tartarus_boot_info_t* tartarus_boot_info, uint16_t version) {
     g_tartarus_boot_info = tartarus_boot_info;
     uint8_t major = version >> 8;

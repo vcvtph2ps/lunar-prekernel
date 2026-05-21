@@ -26,6 +26,11 @@ extern uint8_t x86_64_kernel_handoff_end[];
 static x86_64_kernel_entry_t g_boot_trampoline = nullptr;
 static bootinfo_kernel_entry_point_t g_kernel_entry_point;
 
+__attribute__((no_sanitize("undefined")))
+static void handoff_to_kernel(x86_64_kernel_entry_t trampoline, bootinfo_kernel_entry_point_t entry, uintptr_t stack, uintptr_t page_tables, bootinfo_t* boot_info, uint64_t core_id) {
+    trampoline(entry, stack, page_tables, boot_info, core_id);
+}
+
 ATOMIC static uint32_t g_ap_init_lock = 0;
 
 bootinfo_t* g_boot_info = nullptr;
@@ -35,7 +40,7 @@ bootinfo_t* g_boot_info = nullptr;
 
     arch_machine_init(boot_info->core_id, (uintptr_t) boot_info->cpu_local);
 
-    g_boot_trampoline(g_kernel_entry_point, boot_info->ap_stack, g_ptm.tplt, nullptr, boot_info->core_id);
+    handoff_to_kernel(g_boot_trampoline, g_kernel_entry_point, boot_info->ap_stack, g_ptm.tplt, nullptr, boot_info->core_id);
     while(1);
 }
 
@@ -146,6 +151,6 @@ extern uint8_t _binary_kernel_elf_end[]; // NOLINT
     boot_info->kernel_segment_count = kernel_image_info.segment_count;
 
     ATOMIC_STORE(&g_ap_init_lock, 1, ATOMIC_RELEASE);
-    g_boot_trampoline(g_kernel_entry_point, stack, g_ptm.tplt, boot_info, 0);
+    handoff_to_kernel(g_boot_trampoline, g_kernel_entry_point, stack, g_ptm.tplt, boot_info, 0);
     while(1);
 }

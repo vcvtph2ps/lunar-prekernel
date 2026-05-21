@@ -119,6 +119,13 @@ table.extend(kernel_flags, {
 
 local linker_script = fab.def_source("support/" .. opt_arch .. "-" .. opt_bootloader .. ".lds")
 
+if opt_build_type == "debug" then
+    table.extend(kernel_flags, {
+        "-fsanitize=undefined",
+        "-fstack-protector-all"
+    })
+end
+
 local prekernel_objs = get_prekernel_objs(kernel_flags)
 
 table.extend(objects, prekernel_objs)

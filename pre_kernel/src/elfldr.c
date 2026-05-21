@@ -1,12 +1,11 @@
 #include <common/mem.h>
 #include <elfldr.h>
 #include <lib/math.h>
+#include <log.h>
 #include <memory/pmm.h>
 #include <memory/ptm.h>
+#include <protocol/bootinfo.h>
 #include <stdint.h>
-
-#include "log.h"
-#include "protocol/bootinfo.h"
 
 typedef struct {
     unsigned char e_ident[16];

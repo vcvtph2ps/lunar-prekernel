@@ -1,4 +1,5 @@
 #include <ap.h>
+#include <boot.h>
 #include <common/mem.h>
 #include <lib/math.h>
 #include <limine.h>
@@ -9,8 +10,6 @@
 #include <protocol/bootinfo.h>
 #include <stddef.h>
 #include <stdint.h>
-
-#include "boot.h"
 
 
 [[noreturn]] void prekernel_init(bootinfo_t* boot_info);

@@ -1,7 +1,9 @@
 #include <ap.h>
+#include <arch/cr.h>
 #include <arch/gdt.h>
 #include <arch/machine.h>
 #include <arch/msr.h>
+#include <boot.h>
 #include <common/mem.h>
 #include <elfldr.h>
 #include <lib/helpers.h>
@@ -13,9 +15,6 @@
 #include <panic.h>
 #include <protocol/bootinfo.h>
 
-#include "arch/cr.h"
-
-
 #define CORE_STACK_PGCNT 16
 
 typedef void (*x86_64_kernel_entry_t)(bootinfo_kernel_entry_point_t entry, uintptr_t stack, uintptr_t page_tables, bootinfo_t* boot_info, uint64_t core_id);
@@ -26,8 +25,7 @@ extern uint8_t x86_64_kernel_handoff_end[];
 static x86_64_kernel_entry_t g_boot_trampoline = nullptr;
 static bootinfo_kernel_entry_point_t g_kernel_entry_point;
 
-__attribute__((no_sanitize("undefined")))
-static void handoff_to_kernel(x86_64_kernel_entry_t trampoline, bootinfo_kernel_entry_point_t entry, uintptr_t stack, uintptr_t page_tables, bootinfo_t* boot_info, uint64_t core_id) {
+__attribute__((no_sanitize("undefined"))) static void handoff_to_kernel(x86_64_kernel_entry_t trampoline, bootinfo_kernel_entry_point_t entry, uintptr_t stack, uintptr_t page_tables, bootinfo_t* boot_info, uint64_t core_id) {
     trampoline(entry, stack, page_tables, boot_info, core_id);
 }
 
@@ -35,7 +33,7 @@ ATOMIC static uint32_t g_ap_init_lock = 0;
 
 bootinfo_t* g_boot_info = nullptr;
 
-[[noreturn]] void init_ap(ap_boot_info_t* boot_info) {
+[[noreturn]] void prekernel_init_ap(ap_boot_info_t* boot_info) {
     while(ATOMIC_LOAD(&g_ap_init_lock, ATOMIC_ACQUIRE) == 0);
 
     arch_machine_init(boot_info->core_id, (uintptr_t) boot_info->cpu_local);
@@ -43,9 +41,6 @@ bootinfo_t* g_boot_info = nullptr;
     handoff_to_kernel(g_boot_trampoline, g_kernel_entry_point, boot_info->ap_stack, g_ptm.tplt, nullptr, boot_info->core_id);
     while(1);
 }
-
-bool tartarus_core_is_bsp(uint64_t tartarus_core_index);
-void tartarus_start_ap(uint64_t tartarus_core_idnex, ap_boot_info_t* boot_info);
 
 extern uint8_t _binary_kernel_elf_start[]; // NOLINT
 extern uint8_t _binary_kernel_elf_end[]; // NOLINT
@@ -82,7 +77,7 @@ extern uint8_t _binary_kernel_elf_end[]; // NOLINT
 
     uint64_t core_id = 1;
     for(uint64_t i = 0; i < boot_info->core_count; i++) {
-        if(tartarus_core_is_bsp(i)) { continue; }
+        if(g_boot_core_is_bsp(i)) { continue; }
 
         log_print("starting ap %lu\n", i);
 
@@ -90,7 +85,7 @@ extern uint8_t _binary_kernel_elf_end[]; // NOLINT
         ap_boot_info->cpu_local = ((uintptr_t) cpu_local_block) + (core_id * kernel_image_info.kernel_info->cpu_local_size);
         ap_boot_info->ap_stack = ((uintptr_t) pmm_alloc(CORE_STACK_PGCNT) + boot_info->hhdm_offset) + (CORE_STACK_PGCNT * PTM_PAGE_GRANULARITY);
         ap_boot_info->core_id = core_id++;
-        tartarus_start_ap(i, ap_boot_info);
+        g_boot_start_ap(i, ap_boot_info);
     }
 
     size_t size = MATH_ALIGN_UP((x86_64_kernel_handoff_end - x86_64_kernel_handoff), PTM_PAGE_GRANULARITY) / PTM_PAGE_GRANULARITY;

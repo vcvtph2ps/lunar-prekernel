@@ -131,7 +131,7 @@ void ptm_map_at(uintptr_t cr3, size_t level_count, uint64_t vaddr, uint64_t padd
 
 void ptm_create_hhdm_mappings() {
     size_t frozen_map_size = g_pmm_map_size;
-    pmm_map_entry_t* frozen_map = pmm_alloc(MATH_ALIGN_UP(sizeof(pmm_map_entry_t) * frozen_map_size, PTM_PAGE_GRANULARITY) / PTM_PAGE_GRANULARITY);
+    pmm_map_entry_t* frozen_map = (pmm_map_entry_t*) ((uintptr_t) pmm_alloc(MATH_ALIGN_UP(sizeof(pmm_map_entry_t) * frozen_map_size, PTM_PAGE_GRANULARITY) / PTM_PAGE_GRANULARITY) + g_boot_info->hhdm_offset);
     memcpy(frozen_map, &g_pmm_map, sizeof(pmm_map_entry_t) * frozen_map_size);
 
     for(size_t i = 0; i < g_pmm_map_size; i++) {

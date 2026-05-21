@@ -20,7 +20,7 @@ void pagedb_setup(uintptr_t kernel_base, size_t pagedb_entry_size, uintptr_t* pf
     if(pagedb_end > kernel_base) { panic("pagedb overlaps with kernel image! pagedb_end=0x%016lx, kernel_base=0x%016lx", pagedb_end, kernel_base); }
 
     size_t frozen_map_size = g_pmm_map_size;
-    pmm_map_entry_t* frozen_map = pmm_alloc(MATH_ALIGN_UP(sizeof(pmm_map_entry_t) * frozen_map_size, PTM_PAGE_GRANULARITY) / PTM_PAGE_GRANULARITY);
+    pmm_map_entry_t* frozen_map = (pmm_map_entry_t*) ((uintptr_t) pmm_alloc(MATH_ALIGN_UP(sizeof(pmm_map_entry_t) * frozen_map_size, PTM_PAGE_GRANULARITY) / PTM_PAGE_GRANULARITY) + g_boot_info->hhdm_offset);
     memcpy(frozen_map, &g_pmm_map, sizeof(pmm_map_entry_t) * frozen_map_size);
 
     for(size_t i = 0; i < g_pmm_map_size; i++) {

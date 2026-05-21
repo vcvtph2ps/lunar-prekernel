@@ -1,4 +1,5 @@
 #include <ap.h>
+#include <boot.h>
 #include <common/mem.h>
 #include <lib/math.h>
 #include <log.h>
@@ -11,10 +12,9 @@
 #include <tartarus.h>
 
 [[noreturn]] void prekernel_init(bootinfo_t* boot_info);
+[[noreturn]] void prekernel_init_ap(ap_boot_info_t* boot_info);
 
 static tartarus_boot_info_t* g_tartarus_boot_info;
-
-void init_ap();
 
 bool tartarus_core_is_bsp(uint64_t tartarus_core_index) {
     return (g_tartarus_boot_info->cpus[tartarus_core_index].flags & TARTARUS_CPU_FLAG_IS_BSP) != 0;
@@ -23,7 +23,7 @@ bool tartarus_core_is_bsp(uint64_t tartarus_core_index) {
 __attribute__((no_sanitize("undefined"))) // @todo: tartarus misaligned pointer bug
 void tartarus_start_ap(uint64_t tartarus_core_index, ap_boot_info_t* boot_info) {
     *g_tartarus_boot_info->cpus[tartarus_core_index].argument = (uint64_t) boot_info;
-    *g_tartarus_boot_info->cpus[tartarus_core_index].park_address = (uintptr_t) init_ap;
+    *g_tartarus_boot_info->cpus[tartarus_core_index].park_address = (uintptr_t) prekernel_init_ap; // @note: this can be used directly since tartarus just passes argument in rdi
 }
 
 __attribute__((no_sanitize("undefined"))) // @todo: tartarus misaligned pointer bug
@@ -107,6 +107,9 @@ __attribute__((no_sanitize("undefined"))) // @todo: tartarus misaligned pointer 
         module->phys_addr = tartarus_module->paddr;
         module->size = tartarus_module->size;
     }
+
+    g_boot_start_ap = tartarus_start_ap;
+    g_boot_core_is_bsp = tartarus_core_is_bsp;
 
     prekernel_init(boot_info);
     while(1);

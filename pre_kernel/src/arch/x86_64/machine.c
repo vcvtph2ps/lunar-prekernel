@@ -80,4 +80,5 @@ void arch_machine_init(uint64_t core_id, uintptr_t cpu_local_ptr) {
     machine_setup_control_registers(core_id);
     machine_setup_gdt();
     arch_msr_write(ARCH_MSR_ACTIVE_GS_BASE, cpu_local_ptr);
+    arch_msr_write(ARCH_MSR_INACTIVE_GS_BASE, 0);
 }

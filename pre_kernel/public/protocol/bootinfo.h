@@ -91,6 +91,9 @@ typedef struct [[gnu::packed]] {
     uintptr_t pfndb_start;
     uintptr_t pfndb_size;
 
+    uintptr_t cpulocal_start;
+    uintptr_t cpulocal_size;
+
     size_t mm_entry_count;
     bootinfo_mm_entry_t* mm_entries;
 

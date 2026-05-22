@@ -75,6 +75,9 @@ extern uint8_t _binary_kernel_elf_end[]; // NOLINT
     memset(cpu_local_block, 0, cpu_local_block_size);
     void* ap_boot_info_block = (void*) ((uintptr_t) pmm_alloc(MATH_ALIGN_UP(sizeof(ap_boot_info_t) * boot_info->core_count, PTM_PAGE_GRANULARITY) / PTM_PAGE_GRANULARITY) + boot_info->hhdm_offset);
 
+    boot_info->cpulocal_start = (uintptr_t) cpu_local_block;
+    boot_info->cpulocal_size = cpu_local_block_size;
+
     uint64_t core_id = 1;
     for(uint64_t i = 0; i < boot_info->core_count; i++) {
         if(g_boot_core_is_bsp(i)) { continue; }

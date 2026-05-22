@@ -1,4 +1,4 @@
-#include <common/mem.h>
+#include <runtime/mem.h>
 #include <stdint.h>
 
 [[gnu::weak]] void memset(void* dest, int ch, size_t count) {

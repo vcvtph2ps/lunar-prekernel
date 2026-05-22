@@ -1,19 +1,19 @@
-#include <ap.h>
 #include <arch/cr.h>
 #include <arch/gdt.h>
 #include <arch/machine.h>
 #include <arch/msr.h>
-#include <boot.h>
-#include <common/mem.h>
-#include <elfldr.h>
+#include <boot/ap.h>
+#include <boot/boot.h>
 #include <lib/helpers.h>
 #include <lib/math.h>
+#include <loader/elfldr.h>
 #include <log.h>
 #include <memory/pagedb.h>
 #include <memory/pmm.h>
 #include <memory/ptm.h>
 #include <panic.h>
 #include <protocol/bootinfo.h>
+#include <runtime/mem.h>
 
 #define CORE_STACK_PGCNT 16
 
@@ -31,7 +31,7 @@ __attribute__((no_sanitize("undefined"))) static void handoff_to_kernel(x86_64_k
 
 ATOMIC static uint32_t g_ap_init_lock = 0;
 
-bootinfo_t* g_boot_info = nullptr;
+bootinfo_t* g_globals_boot_info = nullptr;
 
 [[noreturn]] void prekernel_init_ap(ap_boot_info_t* boot_info) {
     while(ATOMIC_LOAD(&g_ap_init_lock, ATOMIC_ACQUIRE) == 0);
@@ -46,7 +46,7 @@ extern uint8_t _binary_kernel_elf_start[]; // NOLINT
 extern uint8_t _binary_kernel_elf_end[]; // NOLINT
 
 [[noreturn]] void prekernel_init(bootinfo_t* boot_info) {
-    g_boot_info = boot_info;
+    g_globals_boot_info = boot_info;
     log_print("Hai :333\n");
 
     for(size_t i = 0; i < g_pmm_map_size; i++) {
@@ -95,7 +95,7 @@ extern uint8_t _binary_kernel_elf_end[]; // NOLINT
     size_t size = MATH_ALIGN_UP((x86_64_kernel_handoff_end - x86_64_kernel_handoff), PTM_PAGE_GRANULARITY) / PTM_PAGE_GRANULARITY;
     log_print("boot trampoline size: %zu\n", size);
     void* boot_trampoline_alloc = pmm_alloc(size);
-    memcpy((void*) ((uintptr_t) boot_trampoline_alloc + g_boot_info->hhdm_offset), (void*) x86_64_kernel_handoff, (x86_64_kernel_handoff_end - x86_64_kernel_handoff));
+    memcpy((void*) ((uintptr_t) boot_trampoline_alloc + g_globals_boot_info->hhdm_offset), (void*) x86_64_kernel_handoff, (x86_64_kernel_handoff_end - x86_64_kernel_handoff));
 
     uintptr_t current_cr3 = arch_cr_read_cr3();
     uintptr_t level_count = arch_cr_read_cr4() & (1 << 12) ? 5 : 4;

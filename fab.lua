@@ -117,7 +117,7 @@ table.extend(kernel_flags, {
     "-Wno-error=unused-function"
 })
 
-local linker_script = fab.def_source("support/" .. opt_arch .. "-" .. opt_bootloader .. ".lds")
+local linker_script = fab.def_source("support/" .. opt_arch .. ".lds")
 
 if opt_build_type == "debug" then
     table.extend(kernel_flags, {
@@ -132,7 +132,8 @@ table.extend(objects, prekernel_objs)
 table.extend(objects, { fab.def_source("kernel.o") })
 
 local lunar = ld:link("lunar.elf", objects, {
-    "-znoexecstack"
+    "-znoexecstack",
+    "-e", "prekernel_entry_" .. opt_bootloader
 }, linker_script)
 
 return {

@@ -1,5 +1,5 @@
 #pragma once
-#include <ap.h>
+#include <boot/ap.h>
 #include <stdint.h>
 
 typedef bool (*boot_core_is_bsp_fn)(uint64_t core_index);

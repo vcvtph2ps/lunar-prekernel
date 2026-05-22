@@ -1,10 +1,11 @@
-#include <common/mem.h>
-#include <elfldr.h>
+#include <globals.h>
 #include <lib/math.h>
+#include <loader/elfldr.h>
 #include <log.h>
 #include <memory/pmm.h>
 #include <memory/ptm.h>
 #include <protocol/bootinfo.h>
+#include <runtime/mem.h>
 #include <stdint.h>
 
 typedef struct {
@@ -69,8 +70,6 @@ typedef struct {
 #define PFLAGS_READ (1 << 2)
 #define PTYPE_NOTE 4
 
-extern bootinfo_t* g_boot_info;
-
 bool elf_supported(const elf64_elf_header_t* elf_header) {
     if(!elf_header) { return false; }
     if(elf_header->e_ident[0] != 0x7f || elf_header->e_ident[1] != 'E' || elf_header->e_ident[2] != 'L' || elf_header->e_ident[3] != 'F') { return false; }
@@ -104,8 +103,8 @@ void internal_elf_handle_pt_load(elf64_program_header_t* phdr, elfldr_loader_inf
         ptm_map(j, paddr + (j - start_vaddr), PTM_PAGE_GRANULARITY, ptm_flags);
     }
 
-    memset((void*) (paddr + g_boot_info->hhdm_offset), 0, end_vaddr - start_vaddr);
-    memcpy((void*) (paddr + (phdr->p_vaddr - start_vaddr) + g_boot_info->hhdm_offset), (void*) (phdr->p_offset + (uintptr_t) _binary_kernel_elf_start), phdr->p_filesz);
+    memset((void*) (paddr + g_globals_boot_info->hhdm_offset), 0, end_vaddr - start_vaddr);
+    memcpy((void*) (paddr + (phdr->p_vaddr - start_vaddr) + g_globals_boot_info->hhdm_offset), (void*) (phdr->p_offset + (uintptr_t) _binary_kernel_elf_start), phdr->p_filesz);
 
     size_t segment_idx = loader_info->segment_count++;
     loader_info->segments[segment_idx].paddr = paddr + (phdr->p_vaddr - start_vaddr);
@@ -126,7 +125,7 @@ bool internal_elf_load_image(elfldr_loader_info_t* loader_info) {
         if(phdrs[i].p_type == PTYPE_LOAD) load_count++;
     }
 
-    loader_info->segments = (bootinfo_segment_t*) ((uintptr_t) pmm_alloc(MATH_ALIGN_UP(load_count * sizeof(bootinfo_segment_t), PTM_PAGE_GRANULARITY) / PTM_PAGE_GRANULARITY) + g_boot_info->hhdm_offset);
+    loader_info->segments = (bootinfo_segment_t*) ((uintptr_t) pmm_alloc(MATH_ALIGN_UP(load_count * sizeof(bootinfo_segment_t), PTM_PAGE_GRANULARITY) / PTM_PAGE_GRANULARITY) + g_globals_boot_info->hhdm_offset);
     loader_info->segment_count = 0;
 
     for(size_t i = 0; i < elf_header->e_phnum; i++) {
@@ -162,7 +161,7 @@ bool internal_elf_load_image(elfldr_loader_info_t* loader_info) {
         for(size_t j = 0; j < loader_info->segment_count; j++) {
             bootinfo_segment_t* seg = &loader_info->segments[j];
             if(sh_addr >= seg->vaddr && sh_addr < seg->vaddr + seg->size) {
-                loader_info->kernel_info = (bootinfo_kernel_info_t*) ((uintptr_t) seg->paddr + (sh_addr - seg->vaddr) + g_boot_info->hhdm_offset);
+                loader_info->kernel_info = (bootinfo_kernel_info_t*) ((uintptr_t) seg->paddr + (sh_addr - seg->vaddr) + g_globals_boot_info->hhdm_offset);
                 break;
             }
         }

@@ -1,6 +1,6 @@
-#include <ap.h>
-#include <boot.h>
-#include <common/mem.h>
+#include <boot/ap.h>
+#include <boot/boot.h>
+#include <runtime/mem.h>
 #include <lib/math.h>
 #include <limine.h>
 #include <log.h>

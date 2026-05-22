@@ -137,6 +137,7 @@ void ptm_create_hhdm_mappings() {
     for(size_t i = 0; i < g_pmm_map_size; i++) {
         switch(frozen_map[i].type) {
             case PMM_MAP_TYPE_FREE:
+            case PMM_MAP_TYPE_USED:
             case PMM_MAP_TYPE_ALLOCATED:
             case PMM_MAP_TYPE_BOOTLOADER_RECLAIMABLE:
             case PMM_MAP_TYPE_EFI_RECLAIMABLE:

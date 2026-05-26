@@ -109,9 +109,10 @@ extern uint8_t _binary_kernel_elf_end[]; // NOLINT
     void* memory_map_block;
     while(true) {
         size_t memory_map_block_size = MATH_ALIGN_UP(pmm_map_entries, PTM_PAGE_GRANULARITY);
-        memory_map_block = (void*) ((uintptr_t) pmm_alloc(memory_map_block_size / PTM_PAGE_GRANULARITY) + boot_info->hhdm_offset);
+        void* memory_map_phys = pmm_alloc(memory_map_block_size / PTM_PAGE_GRANULARITY);
+        memory_map_block = (void*) ((uintptr_t) memory_map_phys + boot_info->hhdm_offset);
         if(g_pmm_map_size > pmm_map_entries) {
-            pmm_free(memory_map_block, memory_map_block_size / PTM_PAGE_GRANULARITY);
+            pmm_free(memory_map_phys, memory_map_block_size / PTM_PAGE_GRANULARITY);
             pmm_map_entries *= 2;
             log_print("memory map block too small, trying again with %zu entries\n", pmm_map_entries);
         } else {

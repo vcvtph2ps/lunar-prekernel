@@ -6,6 +6,26 @@
 #include <panic.h>
 #include <stdint.h>
 
+#define PAT_UNCACHEABLE 0ULL
+#define PAT_WRITE_COMBINING 1ULL
+#define PAT_WRITE_THROUGH 4ULL
+#define PAT_WRITE_PROTECT 5ULL
+#define PAT_WRITE_BACK 6ULL
+#define PAT_UNCACHED 7ULL
+
+void setup_page_table_attributes() {
+    uint8_t pat0 = PAT_WRITE_BACK;
+    uint8_t pat1 = PAT_WRITE_THROUGH;
+    uint8_t pat2 = PAT_UNCACHED;
+    uint8_t pat3 = PAT_UNCACHEABLE;
+    uint8_t pat4 = PAT_WRITE_COMBINING;
+    uint8_t pat5 = PAT_UNCACHEABLE; // UNUSED
+    uint8_t pat6 = PAT_UNCACHEABLE; // UNUSED
+    uint8_t pat7 = PAT_UNCACHEABLE; // UNUSED
+    uint64_t pat = pat0 | ((uint64_t) pat1 << 8) | ((uint64_t) pat2 << 16) | ((uint64_t) pat3 << 24) | ((uint64_t) pat4 << 32) | ((uint64_t) pat5 << 40) | ((uint64_t) pat6 << 48) | ((uint64_t) pat7 << 56);
+    arch_msr_write(ARCH_MSR_PAT_MSR, pat);
+}
+
 static void machine_setup_control_registers(uint64_t core_id) {
     if(!arch_cpuid_is_feature_supported(ARCH_CPUID_FEATURE_FXSR)) { panic("FXSR not supported on this CPU!"); }
 
@@ -40,6 +60,18 @@ static void machine_setup_control_registers(uint64_t core_id) {
         log_print_raw("SMAP, ");
     }
 
+    if(arch_cpuid_is_feature_supported(ARCH_CPUID_FEATURE_FRED)) {
+        cr4 |= (1ul << 32); // CR4.FRED
+        log_print_raw("FRED, ");
+    }
+
+    if(arch_cpuid_is_feature_supported(ARCH_CPUID_FEATURE_PAT)) {
+        setup_page_table_attributes();
+        log_print_raw("PAT, ");
+    }
+
+    if(arch_cpuid_is_feature_supported(ARCH_CPUID_FEATURE_LKGS)) { log_print_raw("LKGS, "); }
+
     if(arch_cpuid_is_feature_supported(ARCH_CPUID_FEATURE_XSAVE)) {
         log_print_raw("XSAVE, ");
         cr4 |= 1 << 18; // CR4.OSXSAVE
@@ -62,7 +94,7 @@ static void machine_setup_control_registers(uint64_t core_id) {
     arch_cr_write_cr4(cr4);
     if(write_xcr0) { arch_cr_write_xcr0(xcr0); }
 
-    arch_msr_write(ARCH_MSR_EFER, arch_msr_read(ARCH_MSR_EFER) | (1 << 11)); // EFER.NXE
+    if(arch_cpuid_is_feature_supported(ARCH_CPUID_FEATURE_NX_PAGES)) arch_msr_write(ARCH_MSR_EFER, arch_msr_read(ARCH_MSR_EFER) | (1 << 11)); // EFER.NXE
 }
 
 void arch_ldt_load_ldt(uint16_t ldtr);

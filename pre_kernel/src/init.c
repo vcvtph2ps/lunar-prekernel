@@ -1,3 +1,4 @@
+#include <arch/16550uart.h>
 #include <arch/cr.h>
 #include <arch/gdt.h>
 #include <arch/machine.h>
@@ -47,6 +48,8 @@ extern uint8_t _binary_kernel_elf_end[]; // NOLINT
 
 [[noreturn]] void prekernel_init(bootinfo_t* boot_info) {
     g_globals_boot_info = boot_info;
+    arch_16550uart_early_setup();
+
     log_print("Hai :333\n");
 
     for(size_t i = 0; i < g_pmm_map_size; i++) {
@@ -141,8 +144,6 @@ extern uint8_t _binary_kernel_elf_end[]; // NOLINT
         boot_info->mm_entries[i].length = entry->length;
         boot_info->mm_entries[i].type = type;
     }
-
-    log_print("cpu_local size: %zu\n", kernel_image_info.kernel_info->cpu_local_size);
 
     arch_machine_init(0, (uintptr_t) cpu_local_block);
 

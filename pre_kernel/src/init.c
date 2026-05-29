@@ -44,7 +44,7 @@ bootinfo_t* g_globals_boot_info = nullptr;
 [[noreturn]] void prekernel_init_ap(ap_boot_info_t* boot_info) {
     while(ATOMIC_LOAD(&g_ap_init_lock, ATOMIC_ACQUIRE) == 0);
 
-    arch_machine_init(boot_info->core_id, (uintptr_t) boot_info->cpu_local);
+    arch_machine_init(boot_info->core_id, (uintptr_t) boot_info->cpu_local, boot_info->gdt_pointer);
 
     handoff_to_kernel(g_boot_trampoline, g_kernel_entry_point, boot_info->ap_stack, g_ptm.tplt, nullptr, boot_info->core_id);
     while(1);
@@ -84,6 +84,10 @@ extern uint8_t _binary_kernel_elf_end[]; // NOLINT
     log_print("cpu_local size: %zu\n", kernel_image_info.kernel_info->cpu_local_size);
     memset(cpu_local_block, 0, cpu_local_block_size);
 
+    size_t gdt_block_size = MATH_ALIGN_UP(sizeof(arch_gdt_block_t) * boot_info->core_count, PTM_PAGE_GRANULARITY);
+    arch_gdt_block_t* gdt_blocks = (arch_gdt_block_t*) ((uintptr_t) pmm_alloc(gdt_block_size / PTM_PAGE_GRANULARITY) + boot_info->hhdm_offset);
+    memset(gdt_blocks, 0, gdt_block_size);
+
     void* ap_boot_info_block = (void*) ((uintptr_t) pmm_alloc(MATH_ALIGN_UP(sizeof(ap_boot_info_t) * boot_info->core_count, PTM_PAGE_GRANULARITY) / PTM_PAGE_GRANULARITY) + boot_info->hhdm_offset);
 
     boot_info->cpulocal_start = (uintptr_t) cpu_local_block;
@@ -98,6 +102,7 @@ extern uint8_t _binary_kernel_elf_end[]; // NOLINT
         ap_boot_info_t* ap_boot_info = &((ap_boot_info_t*) ap_boot_info_block)[i];
         ap_boot_info->cpu_local = ((uintptr_t) cpu_local_block) + (core_id * kernel_image_info.kernel_info->cpu_local_size);
         ap_boot_info->ap_stack = ((uintptr_t) pmm_alloc(CORE_STACK_PGCNT) + boot_info->hhdm_offset) + (CORE_STACK_PGCNT * PTM_PAGE_GRANULARITY);
+        ap_boot_info->gdt_pointer = (uintptr_t) &gdt_blocks[core_id];
         ap_boot_info->core_id = core_id++;
         g_boot_start_ap(i, ap_boot_info);
     }
@@ -152,7 +157,7 @@ extern uint8_t _binary_kernel_elf_end[]; // NOLINT
         boot_info->mm_entries[i].type = type;
     }
 
-    arch_machine_init(0, (uintptr_t) cpu_local_block);
+    arch_machine_init(0, (uintptr_t) cpu_local_block, (uintptr_t) &gdt_blocks[0]);
 
     g_kernel_entry_point = kernel_image_info.entry_point;
     boot_info->kernel_segments = kernel_image_info.segments;

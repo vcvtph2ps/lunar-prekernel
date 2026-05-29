@@ -4,6 +4,7 @@
 #include <arch/msr.h>
 #include <log.h>
 #include <panic.h>
+#include <runtime/mem.h>
 #include <stdint.h>
 
 #define PAT_UNCACHEABLE 0ULL
@@ -99,18 +100,36 @@ static void machine_setup_control_registers(uint64_t core_id) {
 
 void arch_ldt_load_ldt(uint16_t ldtr);
 
-void machine_setup_gdt() {
-    arch_gdt_ptr_t gdtr;
-    gdtr.base = (uintptr_t) &g_arch_gdt_static_data;
-    gdtr.limit = sizeof(g_arch_gdt_static_data) - 1;
+static void machine_setup_gdt(arch_gdt_block_t* block) {
+    memcpy(&block->gdt, &g_arch_gdt_static_data, sizeof(arch_gdt_t));
 
-    arch_gdt_load_gdt(&gdtr, __builtin_offsetof(arch_gdt_t, kernel_code), __builtin_offsetof(arch_gdt_t, kernel_data), 0x00);
+    uintptr_t tss_base = (uintptr_t) &block->tss;
+    uint32_t tss_limit = (uint32_t) (sizeof(arch_gdt_tss_t) - 1);
+    block->gdt.tss.entry.limit_low = (uint16_t) (tss_limit & 0xFFFF);
+    block->gdt.tss.entry.base_low = (uint16_t) (tss_base & 0xFFFF);
+    block->gdt.tss.entry.base_mid = (uint8_t) ((tss_base >> 16) & 0xFF);
+    block->gdt.tss.entry.access = 0x89; // P=1, DPL=0, available 64-bit TSS
+    block->gdt.tss.entry.limit_high_flags = (uint8_t) ((tss_limit >> 16) & 0xF);
+    block->gdt.tss.entry.base_high = (uint8_t) ((tss_base >> 24) & 0xFF);
+    block->gdt.tss.base_extended = (uint32_t) (tss_base >> 32);
+    block->gdt.tss.reserved0 = 0;
+
+    arch_gdt_ptr_t gdtr;
+    gdtr.base = (uintptr_t) &block->gdt;
+    gdtr.limit = sizeof(arch_gdt_t) - 1;
+
+    uint16_t cs = __builtin_offsetof(arch_gdt_t, kernel_code);
+    uint16_t ds = __builtin_offsetof(arch_gdt_t, kernel_data);
+    uint16_t tr = __builtin_offsetof(arch_gdt_t, tss);
+
+    log_print("gdt base=0x%08lx, limit=0x%04x, cs=0x%02x, ds=0x%02x, tr=0x%02x\n", gdtr.base, gdtr.limit, cs, ds, tr);
+    arch_gdt_load_gdt(&gdtr, cs, ds, tr);
     arch_ldt_load_ldt(0x00);
 }
 
-void arch_machine_init(uint64_t core_id, uintptr_t cpu_local_ptr) {
+void arch_machine_init(uint64_t core_id, uintptr_t cpu_local_ptr, uintptr_t gdt_block) {
     machine_setup_control_registers(core_id);
-    machine_setup_gdt();
+    machine_setup_gdt((arch_gdt_block_t*) gdt_block);
     arch_msr_write(ARCH_MSR_ACTIVE_GS_BASE, cpu_local_ptr);
     arch_msr_write(ARCH_MSR_INACTIVE_GS_BASE, 0);
 }

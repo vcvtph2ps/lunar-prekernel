@@ -43,6 +43,11 @@ typedef struct [[gnu::packed]] {
     uint64_t base;
 } arch_gdt_ptr_t;
 
+typedef struct {
+    arch_gdt_t gdt;
+    arch_gdt_tss_t tss;
+} arch_gdt_block_t;
+
 extern const arch_gdt_t g_arch_gdt_static_data;
 
 void arch_gdt_load_gdt(arch_gdt_ptr_t* gdtr, uint16_t cs, uint16_t ds, uint16_t tr);

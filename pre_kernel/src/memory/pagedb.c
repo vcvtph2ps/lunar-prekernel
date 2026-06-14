@@ -28,9 +28,12 @@ void pagedb_setup(uintptr_t kernel_base, size_t pagedb_entry_size, uintptr_t* pf
         switch(entry->type) {
             case PMM_MAP_TYPE_FREE:
             case PMM_MAP_TYPE_ALLOCATED:
+            case PMM_MAP_TYPE_USED:
             case PMM_MAP_TYPE_BOOTLOADER_RECLAIMABLE:
             case PMM_MAP_TYPE_EFI_RECLAIMABLE:
-            case PMM_MAP_TYPE_ACPI_RECLAIMABLE:       break;
+            case PMM_MAP_TYPE_ACPI_RECLAIMABLE:
+            case PMM_MAP_TYPE_ACPI_NVS:
+            case PMM_MAP_TYPE_RESERVED:               break;
             default:                                  continue;
         }
 

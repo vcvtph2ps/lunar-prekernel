@@ -71,6 +71,10 @@ extern uint8_t _binary_kernel_elf_end[]; // NOLINT
 
     uintptr_t stack = ((uintptr_t) pmm_alloc(CORE_STACK_PGCNT) + boot_info->hhdm_offset) + (CORE_STACK_PGCNT * PTM_PAGE_GRANULARITY);
 
+    size_t hhdm_size = boot_info->hhdm_size;
+    for(size_t i = 0; i < g_pmm_map_size; i++) hhdm_size = MATH_MAX(hhdm_size, g_pmm_map[i].base + g_pmm_map[i].length);
+    boot_info->hhdm_size = hhdm_size;
+
     size_t system_page_count = MATH_ALIGN_UP(boot_info->hhdm_size, PTM_PAGE_GRANULARITY) / PTM_PAGE_GRANULARITY;
 
     uintptr_t pfndb_start;

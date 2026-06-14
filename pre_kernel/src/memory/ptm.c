@@ -141,7 +141,9 @@ void ptm_create_hhdm_mappings() {
             case PMM_MAP_TYPE_ALLOCATED:
             case PMM_MAP_TYPE_BOOTLOADER_RECLAIMABLE:
             case PMM_MAP_TYPE_EFI_RECLAIMABLE:
-            case PMM_MAP_TYPE_ACPI_RECLAIMABLE:       break;
+            case PMM_MAP_TYPE_ACPI_RECLAIMABLE:
+            case PMM_MAP_TYPE_ACPI_NVS:
+            case PMM_MAP_TYPE_RESERVED:               break;
             default:                                  continue;
         }
 

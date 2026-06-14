@@ -1,6 +1,5 @@
 #include <boot/ap.h>
 #include <boot/boot.h>
-#include <runtime/mem.h>
 #include <lib/math.h>
 #include <limine.h>
 #include <log.h>
@@ -8,6 +7,7 @@
 #include <memory/ptm.h>
 #include <panic.h>
 #include <protocol/bootinfo.h>
+#include <runtime/mem.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -76,7 +76,6 @@ void limine_start_ap(uint64_t limine_core_index, ap_boot_info_t* boot_info) {
         log_print("Limine bootloader info request failed");
     }
 
-    size_t hhdm_size = 0;
     for(size_t i = 0; i < g_memmap_request.response->entry_count; i++) {
         struct limine_memmap_entry* mm_entry = g_memmap_request.response->entries[i];
         pmm_map_type_t type;
@@ -93,7 +92,6 @@ void limine_start_ap(uint64_t limine_core_index, ap_boot_info_t* boot_info) {
             default:                                   panic("Invalid memory map entry type");
         }
         pmm_map_add(mm_entry->base, mm_entry->length, type);
-        hhdm_size = math_max(hhdm_size, mm_entry->base + mm_entry->length);
     }
 
     size_t boot_info_block_size = sizeof(bootinfo_t);
@@ -109,7 +107,6 @@ void limine_start_ap(uint64_t limine_core_index, ap_boot_info_t* boot_info) {
     boot_info->boot_timestamp = g_boottime_request.response->timestamp;
     boot_info->rdsp_physical = (uintptr_t) g_rsdp_request.response->address;
     boot_info->hhdm_offset = g_hhdm_request.response->offset;
-    boot_info->hhdm_size = hhdm_size;
 
     uintptr_t boot_info_block_pointer = (uintptr_t) boot_info + sizeof(bootinfo_t);
 

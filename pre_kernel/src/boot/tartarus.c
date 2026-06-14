@@ -1,12 +1,12 @@
 #include <boot/ap.h>
 #include <boot/boot.h>
-#include <runtime/mem.h>
 #include <lib/math.h>
 #include <log.h>
 #include <memory/pmm.h>
 #include <memory/ptm.h>
 #include <panic.h>
 #include <protocol/bootinfo.h>
+#include <runtime/mem.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <tartarus.h>
@@ -65,7 +65,6 @@ __attribute__((no_sanitize("undefined"))) // @todo: tartarus misaligned pointer 
     boot_info->boot_timestamp = tartarus_boot_info->boot_timestamp;
     boot_info->rdsp_physical = tartarus_boot_info->acpi_rsdp_address;
     boot_info->hhdm_offset = tartarus_boot_info->hhdm_offset;
-    boot_info->hhdm_size = tartarus_boot_info->hhdm_size;
 
     uintptr_t boot_info_block_pointer = (uintptr_t) boot_info + sizeof(bootinfo_t);
 

@@ -71,6 +71,11 @@ static void machine_setup_control_registers(uint64_t core_id) {
         log_print_raw("PAT, ");
     }
 
+    if(arch_cpuid_is_feature_supported(ARCH_CPUID_FEATURE_GLOBAL_PAGES)) {
+        cr4 |= (1ul << 7); // CR4.PGE
+        log_print_raw("PGE, ");
+    }
+
     if(arch_cpuid_is_feature_supported(ARCH_CPUID_FEATURE_LKGS)) { log_print_raw("LKGS, "); }
 
     if(arch_cpuid_is_feature_supported(ARCH_CPUID_FEATURE_XSAVE)) {
@@ -122,7 +127,6 @@ static void machine_setup_gdt(arch_gdt_block_t* block) {
     uint16_t ds = __builtin_offsetof(arch_gdt_t, kernel_data);
     uint16_t tr = __builtin_offsetof(arch_gdt_t, tss);
 
-    log_print("gdt base=0x%08lx, limit=0x%04x, cs=0x%02x, ds=0x%02x, tr=0x%02x\n", gdtr.base, gdtr.limit, cs, ds, tr);
     arch_gdt_load_gdt(&gdtr, cs, ds, tr);
     arch_ldt_load_ldt(0x00);
 }

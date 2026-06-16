@@ -75,15 +75,13 @@ extern uint8_t _binary_kernel_elf_end[]; // NOLINT
     for(size_t i = 0; i < g_pmm_map_size; i++) hhdm_size = MATH_MAX(hhdm_size, g_pmm_map[i].base + g_pmm_map[i].length);
     boot_info->hhdm_size = hhdm_size;
 
-    size_t system_page_count = MATH_ALIGN_UP(boot_info->hhdm_size, PTM_PAGE_GRANULARITY) / PTM_PAGE_GRANULARITY;
-
     uintptr_t pfndb_start;
     size_t pfndb_size;
     pagedb_setup(kernel_image_info.kernel_base, kernel_image_info.kernel_info->pagedb_entry_size, &pfndb_start, &pfndb_size);
     boot_info->pfndb_start = pfndb_start;
     boot_info->pfndb_size = pfndb_size;
 
-    size_t cpu_local_block_size = MATH_ALIGN_UP(system_page_count * kernel_image_info.kernel_info->cpu_local_size, PTM_PAGE_GRANULARITY);
+    size_t cpu_local_block_size = MATH_ALIGN_UP(boot_info->core_count * kernel_image_info.kernel_info->cpu_local_size, PTM_PAGE_GRANULARITY);
     void* cpu_local_block = (void*) ((uintptr_t) pmm_alloc_ext(cpu_local_block_size / PTM_PAGE_GRANULARITY, PTM_PAGE_GRANULARITY, PMM_MAP_TYPE_USED) + boot_info->hhdm_offset);
     log_print("cpu_local size: %zu\n", kernel_image_info.kernel_info->cpu_local_size);
     memset(cpu_local_block, 0, cpu_local_block_size);

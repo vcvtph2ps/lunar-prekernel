@@ -1,5 +1,5 @@
-#include <boot/ap.h>
 #include <boot/boot.h>
+#include <boot/core.h>
 #include <lib/math.h>
 #include <log.h>
 #include <memory/pmm.h>
@@ -12,7 +12,7 @@
 #include <tartarus.h>
 
 [[noreturn]] void prekernel_init(bootinfo_t* boot_info);
-[[noreturn]] void prekernel_init_ap(ap_boot_info_t* boot_info);
+[[noreturn]] void prekernel_init_ap(core_start_info_t* boot_info);
 
 static tartarus_boot_info_t* g_tartarus_boot_info;
 
@@ -21,7 +21,7 @@ bool tartarus_core_is_bsp(uint64_t tartarus_core_index) {
 }
 
 __attribute__((no_sanitize("undefined"))) // @todo: tartarus misaligned pointer bug
-void tartarus_start_ap(uint64_t tartarus_core_index, ap_boot_info_t* boot_info) {
+void tartarus_start_ap(uint64_t tartarus_core_index, core_start_info_t* boot_info) {
     *g_tartarus_boot_info->cpus[tartarus_core_index].argument = (uint64_t) boot_info;
     *g_tartarus_boot_info->cpus[tartarus_core_index].park_address = (uintptr_t) prekernel_init_ap; // @note: this can be used directly since tartarus just passes argument in rdi
 }

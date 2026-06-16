@@ -1,5 +1,5 @@
-#include <boot/ap.h>
 #include <boot/boot.h>
+#include <boot/core.h>
 #include <lib/math.h>
 #include <limine.h>
 #include <log.h>
@@ -13,10 +13,10 @@
 
 
 [[noreturn]] void prekernel_init(bootinfo_t* boot_info);
-[[noreturn]] void prekernel_init_ap(ap_boot_info_t* boot_info);
+[[noreturn]] void prekernel_init_ap(core_start_info_t* boot_info);
 
 [[noreturn]] void limine_ap_entry(struct limine_mp_info* mp_info) {
-    prekernel_init_ap((ap_boot_info_t*) mp_info->extra_argument);
+    prekernel_init_ap((core_start_info_t*) mp_info->extra_argument);
 }
 
 #define LIMINE_REQUEST [[gnu::used, gnu::section(".limine_requests")]]
@@ -61,7 +61,7 @@ bool limine_core_is_bsp(uint64_t limine_core_index) {
     return (g_mp_request.response->cpus[limine_core_index]->lapic_id == g_mp_request.response->bsp_lapic_id);
 }
 
-void limine_start_ap(uint64_t limine_core_index, ap_boot_info_t* boot_info) {
+void limine_start_ap(uint64_t limine_core_index, core_start_info_t* boot_info) {
     g_mp_request.response->cpus[limine_core_index]->extra_argument = (uint64_t) boot_info;
     g_mp_request.response->cpus[limine_core_index]->goto_address = limine_ap_entry;
 }

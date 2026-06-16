@@ -1,10 +1,11 @@
+#include <arch.h>
 #include <arch/16550uart.h>
 #include <arch/cr.h>
 #include <arch/gdt.h>
 #include <arch/machine.h>
 #include <arch/msr.h>
-#include <boot/ap.h>
 #include <boot/boot.h>
+#include <boot/core.h>
 #include <lib/helpers.h>
 #include <lib/math.h>
 #include <loader/elfldr.h>
@@ -16,7 +17,6 @@
 #include <protocol/bootinfo.h>
 #include <runtime/mem.h>
 
-#define CORE_STACK_PGCNT 16
 
 typedef void (*x86_64_kernel_entry_t)(bootinfo_kernel_entry_point_t entry, uintptr_t stack, uintptr_t page_tables, bootinfo_t* boot_info, uint64_t core_id);
 
@@ -41,12 +41,12 @@ __attribute__((no_sanitize("undefined"))) static void handoff_to_kernel(x86_64_k
 
 bootinfo_t* g_globals_boot_info = nullptr;
 
-[[noreturn]] void prekernel_init_ap(ap_boot_info_t* boot_info) {
+[[noreturn]] void prekernel_init_ap(core_start_info_t* boot_info) {
     while(ATOMIC_LOAD(&g_ap_init_lock, ATOMIC_ACQUIRE) == 0);
 
-    arch_machine_init(boot_info->core_id, (uintptr_t) boot_info->cpu_local, boot_info->gdt_pointer);
+    arch_machine_init(boot_info);
 
-    handoff_to_kernel(g_boot_trampoline, g_kernel_entry_point, boot_info->ap_stack, g_ptm.tplt, nullptr, boot_info->core_id);
+    handoff_to_kernel(g_boot_trampoline, g_kernel_entry_point, boot_info->stack, g_ptm.tplt, nullptr, boot_info->core_id);
     while(1);
 }
 
@@ -69,7 +69,8 @@ extern uint8_t _binary_kernel_elf_end[]; // NOLINT
     elfldr_loader_info_t kernel_image_info;
     if(!elfldr_load_kernel(&kernel_image_info)) { panic("failed to load kernel elf image"); }
 
-    uintptr_t stack = ((uintptr_t) pmm_alloc(CORE_STACK_PGCNT) + boot_info->hhdm_offset) + (CORE_STACK_PGCNT * PTM_PAGE_GRANULARITY);
+    log_print("Kernel cpu local size: %zu\n", kernel_image_info.kernel_info->cpu_local_size);
+    log_print("Kernel pagedb entry size: %zu\n", kernel_image_info.kernel_info->pagedb_entry_size);
 
     size_t hhdm_size = boot_info->hhdm_size;
     for(size_t i = 0; i < g_pmm_map_size; i++) hhdm_size = MATH_MAX(hhdm_size, g_pmm_map[i].base + g_pmm_map[i].length);
@@ -81,33 +82,12 @@ extern uint8_t _binary_kernel_elf_end[]; // NOLINT
     boot_info->pfndb_start = pfndb_start;
     boot_info->pfndb_size = pfndb_size;
 
-    size_t cpu_local_block_size = MATH_ALIGN_UP(boot_info->core_count * kernel_image_info.kernel_info->cpu_local_size, PTM_PAGE_GRANULARITY);
-    void* cpu_local_block = (void*) ((uintptr_t) pmm_alloc_ext(cpu_local_block_size / PTM_PAGE_GRANULARITY, PTM_PAGE_GRANULARITY, PMM_MAP_TYPE_USED) + boot_info->hhdm_offset);
-    log_print("cpu_local size: %zu\n", kernel_image_info.kernel_info->cpu_local_size);
-    memset(cpu_local_block, 0, cpu_local_block_size);
+    // arch shit
+    size_t start_info_block_size = MATH_ALIGN_UP(sizeof(core_start_info_t) * boot_info->core_count, PTM_PAGE_GRANULARITY);
+    core_start_info_t* start_info_block = (core_start_info_t*) ((uintptr_t) pmm_alloc(start_info_block_size / PTM_PAGE_GRANULARITY) + g_globals_boot_info->hhdm_offset);
+    memset(start_info_block, 0, start_info_block_size);
 
-    size_t gdt_block_size = MATH_ALIGN_UP(sizeof(arch_gdt_block_t) * boot_info->core_count, PTM_PAGE_GRANULARITY);
-    arch_gdt_block_t* gdt_blocks = (arch_gdt_block_t*) ((uintptr_t) pmm_alloc(gdt_block_size / PTM_PAGE_GRANULARITY) + boot_info->hhdm_offset);
-    memset(gdt_blocks, 0, gdt_block_size);
-
-    void* ap_boot_info_block = (void*) ((uintptr_t) pmm_alloc(MATH_ALIGN_UP(sizeof(ap_boot_info_t) * boot_info->core_count, PTM_PAGE_GRANULARITY) / PTM_PAGE_GRANULARITY) + boot_info->hhdm_offset);
-
-    boot_info->cpulocal_start = (uintptr_t) cpu_local_block;
-    boot_info->cpulocal_size = cpu_local_block_size;
-
-    uint64_t core_id = 1;
-    for(uint64_t i = 0; i < boot_info->core_count; i++) {
-        if(g_boot_core_is_bsp(i)) { continue; }
-
-        log_print("starting ap %lu\n", i);
-
-        ap_boot_info_t* ap_boot_info = &((ap_boot_info_t*) ap_boot_info_block)[i];
-        ap_boot_info->cpu_local = ((uintptr_t) cpu_local_block) + (core_id * kernel_image_info.kernel_info->cpu_local_size);
-        ap_boot_info->ap_stack = ((uintptr_t) pmm_alloc(CORE_STACK_PGCNT) + boot_info->hhdm_offset) + (CORE_STACK_PGCNT * PTM_PAGE_GRANULARITY);
-        ap_boot_info->gdt_pointer = (uintptr_t) &gdt_blocks[core_id];
-        ap_boot_info->core_id = core_id++;
-        g_boot_start_ap(i, ap_boot_info);
-    }
+    arch_setup_cpus(start_info_block, boot_info->core_count, kernel_image_info.kernel_info);
 
     size_t size = MATH_ALIGN_UP((x86_64_kernel_handoff_end - x86_64_kernel_handoff), PTM_PAGE_GRANULARITY) / PTM_PAGE_GRANULARITY;
     log_print("boot trampoline size: %zu\n", size);
@@ -159,7 +139,7 @@ extern uint8_t _binary_kernel_elf_end[]; // NOLINT
         boot_info->mm_entries[i].type = type;
     }
 
-    arch_machine_init(0, (uintptr_t) cpu_local_block, (uintptr_t) &gdt_blocks[0]);
+    arch_machine_init(&start_info_block[0]);
 
     g_kernel_entry_point = kernel_image_info.entry_point;
     boot_info->kernel_segments = kernel_image_info.segments;
@@ -167,7 +147,6 @@ extern uint8_t _binary_kernel_elf_end[]; // NOLINT
 
     g_core_count = boot_info->core_count;
     ATOMIC_STORE(&g_ap_init_lock, 1, ATOMIC_RELEASE);
-
-    handoff_to_kernel(g_boot_trampoline, g_kernel_entry_point, stack, g_ptm.tplt, boot_info, 0);
+    handoff_to_kernel(g_boot_trampoline, g_kernel_entry_point, start_info_block[0].stack, g_ptm.tplt, boot_info, 0);
     while(1);
 }

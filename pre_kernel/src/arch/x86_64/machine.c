@@ -1,3 +1,4 @@
+#include <arch.h>
 #include <arch/cpuid.h>
 #include <arch/cr.h>
 #include <arch/gdt.h>
@@ -6,6 +7,8 @@
 #include <panic.h>
 #include <runtime/mem.h>
 #include <stdint.h>
+
+#include "boot/core.h"
 
 #define PAT_UNCACHEABLE 0ULL
 #define PAT_WRITE_COMBINING 1ULL
@@ -105,7 +108,7 @@ static void machine_setup_control_registers(uint64_t core_id) {
 
 void arch_ldt_load_ldt(uint16_t ldtr);
 
-static void machine_setup_gdt(arch_gdt_block_t* block) {
+static void machine_setup_gdt(arch_core_start_info_t* block) {
     memcpy(&block->gdt, &g_arch_gdt_static_data, sizeof(arch_gdt_t));
 
     uintptr_t tss_base = (uintptr_t) &block->tss;
@@ -131,9 +134,10 @@ static void machine_setup_gdt(arch_gdt_block_t* block) {
     arch_ldt_load_ldt(0x00);
 }
 
-void arch_machine_init(uint64_t core_id, uintptr_t cpu_local_ptr, uintptr_t gdt_block) {
-    machine_setup_control_registers(core_id);
-    machine_setup_gdt((arch_gdt_block_t*) gdt_block);
-    arch_msr_write(ARCH_MSR_ACTIVE_GS_BASE, cpu_local_ptr);
+void arch_machine_init(core_start_info_t* core_info) {
+    arch_core_start_info_t* core_arch_info = (arch_core_start_info_t*) core_info->arch_pointer;
+    machine_setup_control_registers(core_info->core_id);
+    machine_setup_gdt(core_arch_info);
+    arch_msr_write(ARCH_MSR_ACTIVE_GS_BASE, core_info->cpu_local);
     arch_msr_write(ARCH_MSR_INACTIVE_GS_BASE, 0);
 }

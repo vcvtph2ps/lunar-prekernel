@@ -105,7 +105,7 @@ extern uint8_t _binary_kernel_elf_end[]; // NOLINT
     size_t pmm_map_entries = g_pmm_map_size;
     void* memory_map_block;
     while(true) {
-        size_t memory_map_block_size = MATH_ALIGN_UP(pmm_map_entries, PTM_PAGE_GRANULARITY);
+        size_t memory_map_block_size = MATH_ALIGN_UP(pmm_map_entries * sizeof(bootinfo_mm_entry_t), PTM_PAGE_GRANULARITY);
         void* memory_map_phys = pmm_alloc(memory_map_block_size / PTM_PAGE_GRANULARITY);
         memory_map_block = (void*) ((uintptr_t) memory_map_phys + boot_info->hhdm_offset);
         if(g_pmm_map_size > pmm_map_entries) {

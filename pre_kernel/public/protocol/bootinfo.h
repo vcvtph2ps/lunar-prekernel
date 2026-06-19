@@ -9,6 +9,9 @@
 typedef struct [[gnu::packed]] {
     size_t pagedb_entry_size;
     size_t cpu_local_size;
+#ifdef __ARCH_RISCV64__
+    uintptr_t global_pointer;
+#endif
 } bootinfo_kernel_info_t;
 
 typedef struct [[gnu::packed]] {
@@ -83,6 +86,7 @@ typedef struct [[gnu::packed]] {
     uint64_t boot_timestamp;
     uint64_t core_count;
 
+    // @note: can be 0 if not provided
     uintptr_t rdsp_physical;
 
     uintptr_t hhdm_offset;
@@ -105,6 +109,15 @@ typedef struct [[gnu::packed]] {
 
     size_t module_count;
     bootinfo_module_t* modules;
+
+#ifdef __ARCH_RISCV64__
+    char* riscv_base_isa_string;
+    size_t riscv_extension_count;
+    char* (*riscv_extentions)[];
+
+    // @note: can be 0 if not provided.
+    uintptr_t dtb_physical;
+#endif
 } bootinfo_t;
 
 typedef void (*bootinfo_kernel_entry_point_t)(bootinfo_t* boot_info, uint64_t core_id);

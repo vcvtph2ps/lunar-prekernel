@@ -7,6 +7,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+extern bool g_arch_16550uart_works;
+
 void arch_16550uart_early_setup();
 int arch_16550uart_transmit_empty();
 int arch_16550uart_data_ready();

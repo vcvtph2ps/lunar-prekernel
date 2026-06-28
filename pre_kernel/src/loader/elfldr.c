@@ -36,6 +36,15 @@ typedef struct {
 #define ETYPE_DYN 3
 
 #define EMACHINE_X86_64 62
+#define EMACHINE_RISCV 243
+
+#ifdef __ARCH_X86_64__
+#define EMACHINE_EXPECTED EMACHINE_X86_64
+#elif defined(__ARCH_RISCV64__)
+#define EMACHINE_EXPECTED EMACHINE_RISCV
+#else
+#error "Unknown architecture"
+#endif
 
 typedef struct {
     uint32_t p_type;
@@ -75,7 +84,7 @@ bool elf_supported(const elf64_elf_header_t* elf_header) {
     if(elf_header->e_ident[0] != 0x7f || elf_header->e_ident[1] != 'E' || elf_header->e_ident[2] != 'L' || elf_header->e_ident[3] != 'F') { return false; }
     if(elf_header->e_ident[ELF_CLASS_IDX] != ELF_CLASS_64_BIT) { return false; }
     if(elf_header->e_ident[ELF_DATA_IDX] != ELF_DATA_2LSB) { return false; }
-    if(elf_header->e_machine != EMACHINE_X86_64) { return false; }
+    if(elf_header->e_machine != EMACHINE_EXPECTED) { return false; }
     if(elf_header->e_type != ETYPE_EXEC && elf_header->e_type != ETYPE_DYN) { return false; }
     return true;
 }

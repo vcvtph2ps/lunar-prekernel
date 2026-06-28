@@ -1,5 +1,8 @@
 #include <arch.h>
+#include <arch/16550uart.h>
+#include <arch/cr.h>
 #include <arch/gdt.h>
+#include <arch/io.h>
 #include <boot/boot.h>
 #include <globals.h>
 #include <lib/helpers.h>
@@ -11,7 +14,48 @@
 
 #define CORE_STACK_PGCNT 16
 
-void arch_init_early() {}
+typedef void (*x86_64_kernel_entry_t)(bootinfo_kernel_entry_point_t entry, uintptr_t stack, uintptr_t page_tables, bootinfo_t* boot_info, uint64_t core_id);
+
+extern uint8_t x86_64_kernel_handoff[]; // NOLINT
+extern uint8_t x86_64_kernel_handoff_end[]; // NOLINT
+
+static x86_64_kernel_entry_t g_boot_trampoline = nullptr;
+
+void arch_spin_hint() {
+    __builtin_ia32_pause();
+}
+
+void arch_init_early() {
+    arch_16550uart_early_setup();
+}
+
+void arch_debug_putc(char c) {
+    arch_io_port_write_u8(0xe9, (uint8_t) c);
+    if(g_arch_16550uart_works) { arch_16550uart_send(c); }
+}
+
+void arch_prepare_handoff() {
+    size_t size = MATH_ALIGN_UP((uintptr_t) (x86_64_kernel_handoff_end - x86_64_kernel_handoff), PTM_PAGE_GRANULARITY) / PTM_PAGE_GRANULARITY;
+    log_print("boot trampoline size: %zu page(s)\n", size);
+
+    void* boot_trampoline_alloc = pmm_alloc(size);
+    memcpy((void*) ((uintptr_t) boot_trampoline_alloc + g_globals_boot_info->hhdm_offset), (void*) x86_64_kernel_handoff, (uintptr_t) (x86_64_kernel_handoff_end - x86_64_kernel_handoff));
+
+    // @todo: this fucking sucks...
+    uintptr_t current_cr3 = arch_cr_read_cr3();
+    uintptr_t level_count = (arch_cr_read_cr4() & (1u << 12)) ? 5u : 4u;
+
+    // @todo: don't just dump at 0x1000
+    ptm_map_at(current_cr3, level_count, 0x1000, (uintptr_t) boot_trampoline_alloc, size * PTM_PAGE_GRANULARITY, PTM_FLAG_READ | PTM_FLAG_EXEC);
+    ptm_map(0x1000, (uintptr_t) boot_trampoline_alloc, size * PTM_PAGE_GRANULARITY, PTM_FLAG_READ | PTM_FLAG_EXEC);
+
+    g_boot_trampoline = (x86_64_kernel_entry_t) (0x1000);
+}
+
+__attribute__((no_sanitize("undefined"))) [[noreturn]] void arch_handoff_to_kernel(bootinfo_kernel_entry_point_t entry, uintptr_t stack, bootinfo_t* boot_info, uint64_t core_id) {
+    g_boot_trampoline(entry, stack, g_ptm.tplt, boot_info, core_id);
+    __builtin_unreachable();
+}
 
 void arch_setup_cpus(core_start_info_t* core_start_info_block, size_t core_count, bootinfo_kernel_info_t* kernel_info) {
     size_t cpu_local_block_size = MATH_ALIGN_UP(core_count * kernel_info->cpu_local_size, PTM_PAGE_GRANULARITY);

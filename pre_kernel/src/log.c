@@ -1,24 +1,10 @@
-#include <nanoprintf/nanoprintf.h>
-
-///
-#include <arch/16550uart.h>
-#include <arch/io.h>
+#include <arch.h>
 #include <log.h>
-
-extern bool g_arch_16550uart_works;
-
-static void debug_putc(int c) {
-    arch_io_port_write_u8(0xe9, (uint8_t) c);
-}
-
-static void serial_putc(int c) {
-    if(g_arch_16550uart_works) { arch_16550uart_send((char) c); }
-}
+#include <nanoprintf/nanoprintf.h>
 
 static void putc(int c, void* ctx) {
     (void) ctx;
-    debug_putc(c);
-    serial_putc(c);
+    arch_debug_putc((char) c);
 }
 
 void log_vprint_raw(const char* fmt, va_list val) {

@@ -37,6 +37,13 @@ LIMINE_REQUEST volatile struct limine_rsdp_request g_rsdp_request = {
     .revision = 0,
 };
 
+#ifdef __ARCH_RISCV64__
+LIMINE_REQUEST volatile struct limine_dtb_request g_dtb_request = {
+    .id = LIMINE_DTB_REQUEST_ID,
+    .revision = 0,
+};
+#endif
+
 LIMINE_REQUEST volatile struct limine_date_at_boot_request g_boottime_request = {
     .id = LIMINE_DATE_AT_BOOT_REQUEST_ID,
     .revision = 0,
@@ -52,13 +59,17 @@ LIMINE_REQUEST volatile struct limine_internal_module* g_modules[] = { &g_initra
 
 LIMINE_REQUEST volatile struct limine_module_request g_module_request = { .id = LIMINE_MODULE_REQUEST_ID, .revision = 1, .internal_modules = (struct limine_internal_module**) &g_modules, .internal_module_count = 1 };
 
-LIMINE_REQUEST volatile uint64_t g_limine_base_revision[] = LIMINE_BASE_REVISION(LIMINE_API_REVISION);
+LIMINE_REQUEST volatile uint64_t g_limine_base_revision[] = LIMINE_BASE_REVISION(6);
 [[gnu::used, gnu::section(".limine_requests_start")]] volatile uint64_t g_limine_requests_start_marker[] = LIMINE_REQUESTS_START_MARKER;
 [[gnu::used, gnu::section(".limine_requests_end")]] volatile uint64_t g_limine_requests_end_marker[] = LIMINE_REQUESTS_END_MARKER;
 
 
 bool limine_core_is_bsp(uint64_t limine_core_index) {
+#ifdef __ARCH_X86_64__
     return (g_mp_request.response->cpus[limine_core_index]->lapic_id == g_mp_request.response->bsp_lapic_id);
+#elif defined(__ARCH_RISCV64__)
+    return (g_mp_request.response->cpus[limine_core_index]->hartid == g_mp_request.response->bsp_hartid);
+#endif
 }
 
 void limine_start_ap(uint64_t limine_core_index, core_start_info_t* boot_info) {
@@ -67,9 +78,13 @@ void limine_start_ap(uint64_t limine_core_index, core_start_info_t* boot_info) {
 }
 
 [[noreturn]] void prekernel_entry_limine() {
+    if(LIMINE_LOADED_BASE_REVISION_VALID(g_limine_base_revision)) {
+        log_print("Booted via limine protocol version %ld", LIMINE_LOADED_BASE_REVISION(g_limine_base_revision));
+    } else {
+        panic("Booted with invalid limine base revision");
+    }
     if(!LIMINE_BASE_REVISION_SUPPORTED(g_limine_base_revision)) { panic("Booted with unsupported limine base revision"); }
     log_print_raw("\n");
-    log_print("Booted Via Limine Protocol\n");
     if(g_limine_bootloader_info_request.response) {
         log_print("bootloader info: name=\"%s\" version=\"%s\"\n", g_limine_bootloader_info_request.response->name, g_limine_bootloader_info_request.response->version);
     } else {
@@ -105,8 +120,23 @@ void limine_start_ap(uint64_t limine_core_index, core_start_info_t* boot_info) {
     bootinfo_t* boot_info = (bootinfo_t*) ((uintptr_t) pmm_alloc(boot_info_block_size / PTM_PAGE_GRANULARITY) + g_hhdm_request.response->offset);
     boot_info->core_count = g_mp_request.response->cpu_count;
     boot_info->boot_timestamp = g_boottime_request.response->timestamp;
-    boot_info->rdsp_physical = (uintptr_t) g_rsdp_request.response->address;
+    if(g_rsdp_request.response && g_rsdp_request.response->address) {
+        log_print("acpi: supported\n");
+        boot_info->rdsp_physical = (uintptr_t) g_rsdp_request.response->address;
+    }
     boot_info->hhdm_offset = g_hhdm_request.response->offset;
+
+#ifdef __ARCH_RISCV64__
+    boot_info->dtb_physical = 0;
+    boot_info->riscv_base_isa_string = nullptr;
+    boot_info->riscv_extension_count = 0;
+    boot_info->riscv_extentions = nullptr;
+
+    if(g_dtb_request.response && g_dtb_request.response->dtb_ptr) {
+        log_print("dtb: supported\n");
+        boot_info->dtb_physical = (uintptr_t) g_dtb_request.response->dtb_ptr - g_hhdm_request.response->offset;
+    }
+#endif
 
     uintptr_t boot_info_block_pointer = (uintptr_t) boot_info + sizeof(bootinfo_t);
 

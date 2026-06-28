@@ -1,6 +1,10 @@
-local opt_arch = fab.option("arch", { "x86_64" }) or "x86_64"
+local opt_arch = fab.option("arch", { "x86_64", "riscv64" }) or "x86_64"
 local opt_bootloader = fab.option("bootloader", { "limine", "tartarus" }) or "tartarus"
 local opt_build_type = fab.option("buildtype", { "debug", "release" }) or "debug"
+
+if opt_bootloader == "tartarus" and opt_arch == "riscv64" then
+    error("Tartarus does not support riscv64")
+end
 
 local c = require("lang_c")
 local asm = require("lang_nasm")
@@ -27,12 +31,23 @@ local tartarus_protocol = fab.git(
     "d1ecb3dd137ecfb08ac15b6b8fc5233a9daefd97"
 )
 
+local libfdt = nil
+if opt_arch == "riscv64" then
+    libfdt = fab.git(
+        "dtc",
+        "https://github.com/dgibson/dtc.git",
+        "v1.7.0"
+    )
+end
+
 local function get_prekernel_objs(kernel_flags)
     local pre_kernel_sources = sources(fab.glob("pre_kernel/src/**/*.c", "!pre_kernel/src/arch/**"))
     table.extend(pre_kernel_sources, sources(fab.glob(path("pre_kernel/src/arch", opt_arch, "**/*.c"))))
 
     if opt_arch == "x86_64" then
         table.extend(pre_kernel_sources, sources(fab.glob("pre_kernel/src/arch/x86_64/**/*.asm")))
+    elseif opt_arch == "riscv64" then
+        table.extend(pre_kernel_sources, sources(fab.glob("pre_kernel/src/arch/riscv64/**/*.S")))
     end
 
     local pre_kernel_include_dirs = {
@@ -44,13 +59,21 @@ local function get_prekernel_objs(kernel_flags)
     table.insert(pre_kernel_include_dirs, c.include_dir(path(fab.build_dir(), limine_protocol.path, "include")))
     table.insert(pre_kernel_include_dirs, c.include_dir(path(fab.build_dir(), tartarus_protocol.path)))
 
+    if libfdt ~= nil then
+        -- we need to include libfdt c files to override libfdt_env.h :/
+        table.insert(pre_kernel_include_dirs, c.include_dir(path(fab.build_dir(), libfdt.path, "libfdt")))
+        table.insert(pre_kernel_include_dirs, c.include_dir(path(fab.build_dir(), libfdt.path)))
+    end
+
     local generators = {
-        c = function(sources) return clang:generate(sources, kernel_flags, pre_kernel_include_dirs) end
+        c = function(srcs) return clang:generate(srcs, kernel_flags, pre_kernel_include_dirs) end
     }
 
     if opt_arch == "x86_64" then
         local nasm_flags = { "-f", "elf64", "-Werror" }
-        generators.asm = function(sources) return nasm:generate(sources, nasm_flags) end
+        generators.asm = function(srcs) return nasm:generate(srcs, nasm_flags) end
+    elseif opt_arch == "riscv64" then
+        generators.S = function(srcs) return clang:generate(srcs, kernel_flags, pre_kernel_include_dirs) end
     end
 
     return generate(pre_kernel_sources, generators)
@@ -65,8 +88,7 @@ local c_flags = {
     "-Wimplicit-fallthrough",
     "-Wmissing-field-initializers",
 
-    "-fdiagnostics-color=always",
-    "-DLIMINE_API_REVISION=6"
+    "-fdiagnostics-color=always"
 }
 
 -- Flags
@@ -94,12 +116,22 @@ if opt_arch == "x86_64" then
         "-mcmodel=kernel",
         "-D__ARCH_X86_64__"
     })
+elseif opt_arch == "riscv64" then
+    table.extend(c_flags, {
+        "--target=riscv64-none-elf",
+        "-march=rv64gc_zihintpause",
+        "-mabi=lp64",
+        "-mcmodel=medany",
+        "-mno-relax",
+        "-msmall-data-limit=8",
+        "-D__ARCH_RISCV64__"
+    })
+end
 
-    if opt_bootloader == "limine" then
-        table.insert(c_flags, "-D__BOOTLOADER_LIMINE__")
-    elseif opt_bootloader == "tartarus" then
-        table.insert(c_flags, "-D__BOOTLOADER_TARTARUS__")
-    end
+if opt_bootloader == "limine" then
+    table.insert(c_flags, "-D__BOOTLOADER_LIMINE__")
+elseif opt_bootloader == "tartarus" then
+    table.insert(c_flags, "-D__BOOTLOADER_TARTARUS__")
 end
 
 local objects = {}
@@ -114,7 +146,10 @@ table.extend(kernel_flags, {
     "-Wpedantic",
     "-Wno-language-extension-token",
     "-Wno-gnu-zero-variadic-macro-arguments",
-    "-Wno-error=unused-function"
+    "-Wno-gnu-statement-expression-from-macro-expansion",
+    "-Wno-error=unused-function",
+    "-Wno-extra-semi",
+    "-Wno-empty-translation-unit"
 })
 
 local linker_script = fab.def_source("support/" .. opt_arch .. ".lds")

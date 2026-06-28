@@ -1,8 +1,10 @@
+#include <globals.h>
 #include <lib/math.h>
 #include <log.h>
 #include <memory/pmm.h>
 #include <memory/ptm.h>
 #include <panic.h>
+#include <runtime/mem.h>
 
 size_t g_pmm_map_size;
 pmm_map_entry_t g_pmm_map[PMM_MAP_MAX_ENTRIES];
@@ -155,4 +157,25 @@ void* pmm_alloc(size_t page_count) {
 
 void pmm_free(void* address, size_t page_count) {
     pmm_map_set((uint64_t) (uintptr_t) address, page_count * PTM_PAGE_GRANULARITY, PMM_MAP_TYPE_FREE, true);
+}
+
+
+[[nodiscard]] pmm_map_snapshot_t pmm_create_snapshot() {
+    size_t count = g_pmm_map_size + 2;
+    size_t bytes = MATH_ALIGN_UP(sizeof(pmm_map_entry_t) * count, PTM_PAGE_GRANULARITY);
+    void* phys = pmm_alloc(bytes / PTM_PAGE_GRANULARITY);
+    if(phys == NULL) { panic("failed to allocate memory for pmm snapshot"); }
+    if(MATH_ALIGN_UP(sizeof(pmm_map_entry_t) * g_pmm_map_size, PTM_PAGE_GRANULARITY) > bytes) { panic("pmm snapshot size exceeds allocated memory"); }
+
+    pmm_map_entry_t* entries = (pmm_map_entry_t*) ((uintptr_t) phys + g_globals_boot_info->hhdm_offset);
+    memcpy(entries, &g_pmm_map, sizeof(pmm_map_entry_t) * count);
+    return (pmm_map_snapshot_t) {
+        .entries = entries,
+        .count = count,
+        .allocation = { .phys = phys, .bytes = bytes }
+    };
+}
+
+void pmm_free_snapshot(pmm_map_snapshot_t* map) {
+    pmm_free(map->allocation.phys, map->allocation.bytes / PTM_PAGE_GRANULARITY);
 }

@@ -46,3 +46,8 @@ typedef struct [[gnu::packed]] {
 extern const arch_gdt_t g_arch_gdt_static_data;
 
 void arch_gdt_load_gdt(arch_gdt_ptr_t* gdtr, uint16_t cs, uint16_t ds, uint16_t tr);
+
+typedef struct {
+    arch_gdt_t gdt;
+    arch_gdt_tss_t tss;
+} arch_core_start_info_t; // NOLINT

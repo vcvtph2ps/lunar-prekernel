@@ -35,3 +35,15 @@ void pmm_map_set(uint64_t base, uint64_t length, pmm_map_type_t type, bool force
 [[nodiscard]] void* pmm_alloc_ext(size_t page_count, size_t alignment, pmm_map_type_t type);
 [[nodiscard]] void* pmm_alloc(size_t page_count);
 void pmm_free(void* address, size_t count);
+
+typedef struct {
+    pmm_map_entry_t* entries;
+    size_t count;
+    struct {
+        void* phys;
+        size_t bytes;
+    } allocation;
+} pmm_map_snapshot_t;
+
+[[nodiscard]] pmm_map_snapshot_t pmm_create_snapshot();
+void pmm_free_snapshot(pmm_map_snapshot_t* map);

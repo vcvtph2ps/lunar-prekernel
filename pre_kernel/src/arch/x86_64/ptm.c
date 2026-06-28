@@ -129,13 +129,10 @@ void ptm_map_at(uintptr_t cr3, size_t level_count, uint64_t vaddr, uint64_t padd
 }
 
 void ptm_create_hhdm_mappings() {
-    size_t frozen_map_size = g_pmm_map_size;
-    void* frozen_map_phys = pmm_alloc(MATH_ALIGN_UP(sizeof(pmm_map_entry_t) * frozen_map_size, PTM_PAGE_GRANULARITY) / PTM_PAGE_GRANULARITY);
-    pmm_map_entry_t* frozen_map = (pmm_map_entry_t*) ((uintptr_t) frozen_map_phys + g_globals_boot_info->hhdm_offset);
-    memcpy(frozen_map, &g_pmm_map, sizeof(pmm_map_entry_t) * frozen_map_size);
+    pmm_map_snapshot_t snapshot = pmm_create_snapshot();
 
-    for(size_t i = 0; i < g_pmm_map_size; i++) {
-        switch(frozen_map[i].type) {
+    for(size_t i = 0; i < snapshot.count; i++) {
+        switch(snapshot.entries[i].type) {
             case PMM_MAP_TYPE_FREE:
             case PMM_MAP_TYPE_USED:
             case PMM_MAP_TYPE_ALLOCATED:
@@ -147,8 +144,8 @@ void ptm_create_hhdm_mappings() {
             default:                                  continue;
         }
 
-        uint64_t base = frozen_map[i].base;
-        uint64_t length = frozen_map[i].length;
+        uint64_t base = snapshot.entries[i].base;
+        uint64_t length = snapshot.entries[i].length;
         if(base % PTM_PAGE_GRANULARITY != 0) {
             length += base % PTM_PAGE_GRANULARITY;
             base -= base % PTM_PAGE_GRANULARITY;
@@ -158,5 +155,5 @@ void ptm_create_hhdm_mappings() {
         ptm_map(g_globals_boot_info->hhdm_offset + base, base, length, PTM_FLAG_READ | PTM_FLAG_WRITE);
     }
 
-    pmm_free(frozen_map_phys, MATH_ALIGN_UP(sizeof(pmm_map_entry_t) * frozen_map_size, PTM_PAGE_GRANULARITY) / PTM_PAGE_GRANULARITY);
+    pmm_free_snapshot(&snapshot);
 }

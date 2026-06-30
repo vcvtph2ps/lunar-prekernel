@@ -34,7 +34,7 @@ __attribute__((no_sanitize("undefined"))) // @todo: tartarus misaligned pointer 
 
     log_print_raw("\n");
     log_print("Tartarus protcol version: %u.%u\n", major, minor);
-    if(major != 2) { panic("Unsupported Tartarus protocol version\n"); }
+    if(major != 3) { panic("Unsupported Tartarus protocol version\n"); }
 
     for(size_t i = 0; i < tartarus_boot_info->mm_entry_count; i++) {
         tartarus_mm_entry_t* mm_entry = &tartarus_boot_info->mm_entries[i];
@@ -42,6 +42,7 @@ __attribute__((no_sanitize("undefined"))) // @todo: tartarus misaligned pointer 
         switch(mm_entry->type) {
             case TARTARUS_MM_TYPE_EFI_RECLAIMABLE:        [[fallthrough]];
             case TARTARUS_MM_TYPE_USABLE:                 type = PMM_MAP_TYPE_FREE; break;
+            case TARTARUS_MM_TYPE_ACPI_TABLES:            type = PMM_MAP_TYPE_USED; break;
             case TARTARUS_MM_TYPE_RESERVED:               type = PMM_MAP_TYPE_RESERVED; break;
             case TARTARUS_MM_TYPE_BOOTLOADER_RECLAIMABLE: type = PMM_MAP_TYPE_BOOTLOADER_RECLAIMABLE; break;
             case TARTARUS_MM_TYPE_ACPI_RECLAIMABLE:       type = PMM_MAP_TYPE_ACPI_RECLAIMABLE; break;

@@ -28,7 +28,7 @@ local limine_protocol = fab.git(
 local tartarus_protocol = fab.git(
     "tartarus",
     "https://github.com/elysium-os/tartarus-bootloader.git",
-    "d1ecb3dd137ecfb08ac15b6b8fc5233a9daefd97"
+    "e95c3651f16d2560424c2d0d514aa8467d440053"
 )
 
 local uacpi = fab.git(

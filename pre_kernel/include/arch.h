@@ -48,5 +48,5 @@ void arch_spin_hint();
 /**
  * @brief Parse architecture specific information from the FDT/ACPI and store it in the bootinfo struct for the kernel.
  */
-bool arch_parse_extentions(bootinfo_t* boot_info);
+bool arch_parse_extentions();
 #endif

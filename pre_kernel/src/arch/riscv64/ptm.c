@@ -10,7 +10,8 @@
 #include <stdint.h>
 
 // @link arch/riscv64/fdt.c
-size_t arch_fdt_detect_mmu_levels(bootinfo_t* boot_info);
+size_t arch_fdt_detect_mmu_levels();
+size_t arch_acpi_detect_mmu_levels();
 
 #define PTE_V ((uint64_t) (1ULL << 0))
 #define PTE_R ((uint64_t) (1ULL << 1))
@@ -30,8 +31,11 @@ ptm_t g_ptm = {};
 static size_t g_level_count = 3;
 
 static size_t detect_max_level_count() {
-    size_t dtb_levels = arch_fdt_detect_mmu_levels(g_globals_boot_info);
-    if(dtb_levels == 0) { panic("ptm: failed to detect supported paging modes from DTB"); }
+    size_t acpi_levels = arch_acpi_detect_mmu_levels();
+    if(acpi_levels != 0) { return acpi_levels; }
+
+    size_t dtb_levels = arch_fdt_detect_mmu_levels();
+    if(dtb_levels == 0) { panic("ptm: failed to detect supported paging modes"); }
     return dtb_levels;
 }
 

@@ -31,6 +31,12 @@ local tartarus_protocol = fab.git(
     "d1ecb3dd137ecfb08ac15b6b8fc5233a9daefd97"
 )
 
+local uacpi = fab.git(
+    "uacpi",
+    "https://github.com/uACPI/uACPI.git",
+    "9c9b26d6291a1cdd9014cc5bb6b03e596697cbfd"
+)
+
 local libfdt = nil
 if opt_arch == "riscv64" then
     libfdt = fab.git(
@@ -43,6 +49,7 @@ end
 local function get_prekernel_objs(kernel_flags)
     local pre_kernel_sources = sources(fab.glob("pre_kernel/src/**/*.c", "!pre_kernel/src/arch/**"))
     table.extend(pre_kernel_sources, sources(fab.glob(path("pre_kernel/src/arch", opt_arch, "**/*.c"))))
+    table.extend(pre_kernel_sources, sources(fab.glob("source/*.c", { relative_to = uacpi.path })))
 
     if opt_arch == "x86_64" then
         table.extend(pre_kernel_sources, sources(fab.glob("pre_kernel/src/arch/x86_64/**/*.asm")))
@@ -64,6 +71,8 @@ local function get_prekernel_objs(kernel_flags)
         table.insert(pre_kernel_include_dirs, c.include_dir(path(fab.build_dir(), libfdt.path, "libfdt")))
         table.insert(pre_kernel_include_dirs, c.include_dir(path(fab.build_dir(), libfdt.path)))
     end
+
+    table.insert(pre_kernel_include_dirs, c.include_dir(path(fab.build_dir(), uacpi.path, "include")))
 
     local generators = {
         c = function(srcs) return clang:generate(srcs, kernel_flags, pre_kernel_include_dirs) end
@@ -88,7 +97,9 @@ local c_flags = {
     "-Wimplicit-fallthrough",
     "-Wmissing-field-initializers",
 
-    "-fdiagnostics-color=always"
+    "-fdiagnostics-color=always",
+    "-DUACPI_BAREBONES_MODE",
+    "-DUACPI_FORMATTED_LOGGING",
 }
 
 -- Flags

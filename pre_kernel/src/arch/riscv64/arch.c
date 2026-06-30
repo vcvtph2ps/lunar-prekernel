@@ -53,17 +53,16 @@ static uint64_t make_satp_value(uintptr_t root_pa) {
     return ARCH_CSR_SATP_MAKE(mode, root_pa);
 }
 
-bool arch_fdt_parse(bootinfo_t* boot_info);
+bool arch_fdt_parse_extentions();
+bool arch_acpi_parse_extentions();
 
-bool arch_parse_extentions(bootinfo_t* boot_info) {
+bool arch_parse_extentions() {
     // try ACPI first if supported
     if(g_globals_boot_info->rdsp_physical) {
-        // @todo: ...
-        log_print("ACPI: Not yet implemented");
-        return false;
+        if(arch_acpi_parse_extentions()) { return true; }
     }
 
-    if(g_globals_boot_info->dtb_physical) { return arch_fdt_parse(boot_info); }
+    if(g_globals_boot_info->dtb_physical) { return arch_fdt_parse_extentions(); }
 
     return false;
 }

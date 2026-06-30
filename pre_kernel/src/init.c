@@ -11,6 +11,8 @@
 #include <panic.h>
 #include <protocol/bootinfo.h>
 #include <runtime/mem.h>
+#include <uacpi/status.h>
+#include <uacpi/uacpi.h>
 
 static bootinfo_kernel_entry_point_t g_kernel_entry_point;
 
@@ -50,13 +52,19 @@ extern uint8_t _binary_kernel_elf_start[]; // NOLINT
         log_print("pmm_entry[%zu]: base=0x%016lx, length=0x%016lx, type=%u\n", i, entry->base, entry->length, entry->type);
     }
 
+    if(boot_info->rdsp_physical) {
+        void* temporary_buffer = pmm_alloc(PTM_PAGE_GRANULARITY * 2);
+        uacpi_status status = uacpi_setup_early_table_access(temporary_buffer, PTM_PAGE_GRANULARITY * 2);
+        if(status != UACPI_STATUS_OK) { panic("failed to setup acpi tables"); }
+    }
+
     ptm_init();
 
     elfldr_loader_info_t kernel_image_info;
     if(!elfldr_load_kernel(&kernel_image_info)) { panic("failed to load kernel elf image"); }
 
 #ifdef __ARCH_RISCV64__
-    arch_parse_extentions(boot_info);
+    if(!arch_parse_extentions()) { panic("failed to parse extentions"); }
 #endif
 
     log_print("Kernel cpu local size: %zu\n", kernel_image_info.kernel_info->cpu_local_size);

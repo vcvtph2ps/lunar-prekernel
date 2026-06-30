@@ -9,13 +9,22 @@
 #include <runtime/mem.h>
 
 size_t arch_fdt_detect_mmu_levels(bootinfo_t* boot_info) {
-    if(!boot_info || boot_info->dtb_physical == 0) return 0;
+    if(!boot_info || boot_info->dtb_physical == 0) {
+        log_print("fdt: no DTB provided in boot info\n");
+        return 0;
+    }
 
     const void* fdt = (const void*) (boot_info->dtb_physical + boot_info->hhdm_offset);
-    if(fdt_check_header(fdt) != 0) return 0;
+    if(fdt_check_header(fdt) != 0) {
+        log_print("fdt: invalid FDT header at 0x%lx\n", boot_info->dtb_physical);
+        return 0;
+    }
 
     int cpus_node = fdt_path_offset(fdt, "/cpus");
-    if(cpus_node < 0) return 0;
+    if(cpus_node < 0) {
+        log_print("fdt: /cpus node not found (err=%d)\n", cpus_node);
+        return 0;
+    }
 
     int node;
     fdt_for_each_subnode(node, fdt, cpus_node) {
